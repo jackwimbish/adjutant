@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://www.gstatic.com;">
     <title>Adjutant</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <style>
         /* Basic CSS for a clean, modern look */
         :root {
@@ -58,11 +62,60 @@
     </header>
 
     <main>
-        <div id="article-list"></div>
+        <div id="article-list">
+            <p style="color: #888;">Loading application...</p>
+        </div>
     </main>
 
-    <!-- <script src="./renderer.js"></script> -->
-    <script src="./dist/renderer.js"></script>
+    <!-- Define exports for CommonJS compatibility -->
+    <script>
+        window.exports = {};
+        
+        // Track if renderer has been loaded
+        let rendererLoaded = false;
+        
+        // Get Firebase config and load renderer
+        async function loadRendererWithConfig() {
+            if (rendererLoaded) return;
+            
+            try {
+                console.log('HTML: Requesting Firebase config via IPC...');
+                const config = await window.getFirebaseConfig();
+                console.log('HTML: Received Firebase config:', { projectId: config.projectId });
+                
+                if (config && config.apiKey) {
+                    console.log('HTML: Config ready, loading renderer...');
+                    rendererLoaded = true;
+                    
+                    // Store config globally for renderer
+                    window.firebaseConfig = config;
+                    
+                    const script = document.createElement('script');
+                    script.src = './dist/renderer.js';
+                    script.onload = () => console.log('HTML: Renderer script loaded successfully');
+                    script.onerror = (e) => console.error('HTML: Error loading renderer script:', e);
+                    document.body.appendChild(script);
+                } else {
+                    console.error('HTML: Invalid Firebase config received');
+                }
+            } catch (error) {
+                console.error('HTML: Error getting Firebase config:', error);
+                // Retry after delay
+                setTimeout(loadRendererWithConfig, 500);
+            }
+        }
+        
+        // Start when page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('HTML: DOMContentLoaded fired');
+                loadRendererWithConfig();
+            });
+        } else {
+            console.log('HTML: DOM already ready');
+            loadRendererWithConfig();
+        }
+    </script>
 
 </body>
 </html>

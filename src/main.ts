@@ -1,7 +1,22 @@
-import { app, BrowserWindow } from 'electron';
+import 'dotenv/config';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { spawn } from 'child_process';
 import { APP_CONFIG } from './config/app-config';
+
+// Setup IPC handlers
+ipcMain.handle('get-firebase-config', () => {
+  const config = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+  };
+  console.log('Main: Providing Firebase config via IPC:', config.projectId);
+  return config;
+});
 
 // Function to create the main application window
 function createWindow(): void {
