@@ -72,15 +72,23 @@ async function articleExists(articleId: string): Promise<boolean> {
 
 function createArticleData(
   rssItem: RSSItem, 
-  content: string, 
   analysis: AnalysisResult, 
-  source: NewsSource
+  source: NewsSource,
+  scrapingData: {
+    rss_excerpt: string;
+    full_content_text: string;
+    content_source: 'rss' | 'scraped' | 'failed';
+    scraping_status: 'pending' | 'success' | 'failed';
+    scraping_error?: string | null;
+    content_length: number;
+  }
 ): ArticleData {
   return {
     url: rssItem.link!,
     title: rssItem.title!,
     author: rssItem.creator || 'N/A',
-    full_content_text: content,
+    rss_excerpt: scrapingData.rss_excerpt,
+    full_content_text: scrapingData.full_content_text,
     source_name: source.name,
     published_at: rssItem.isoDate ? new Date(rssItem.isoDate) : new Date(),
     fetched_at: new Date(),
@@ -90,6 +98,10 @@ function createArticleData(
     is_read: false,
     is_hidden: false,
     is_favorite: false,
+    content_source: scrapingData.content_source,
+    scraping_status: scrapingData.scraping_status,
+    scraping_error: scrapingData.scraping_error,
+    content_length: scrapingData.content_length,
   };
 }
 
@@ -148,10 +160,18 @@ async function processArticle(article: RSSItem, source: NewsSource) {
   // Use the new LangGraph-style workflow for analysis
   const analysis = await analyzeArticleWithWorkflow(article, source);
 
-  if (analysis) {
-    // Get content for storage (the workflow already processed it)
-    const content = article.content || article.contentSnippet || article.summary || '';
-    const articleData = createArticleData(article, content, analysis, source);
+  if (analysis && analysis.analysis_result) {
+    // The workflow has completed with both analysis and scraping data
+    const scrapingData = {
+      rss_excerpt: analysis.rss_excerpt || '',
+      full_content_text: analysis.full_content_text || '',
+      content_source: analysis.content_source || 'rss' as const,
+      scraping_status: analysis.scraping_status || 'failed' as const,
+      scraping_error: analysis.scraping_error || null,  // Firebase doesn't allow undefined
+      content_length: analysis.content_length || 0,
+    };
+    
+    const articleData = createArticleData(article, analysis.analysis_result, source, scrapingData);
     
     // Save the structured data to Firestore with retry logic
     const saveResult = await withRetry(async () => {
@@ -160,7 +180,7 @@ async function processArticle(article: RSSItem, source: NewsSource) {
     });
     
     if (saveResult) {
-      console.log(`✅ Successfully saved article: ${article.title}`);
+      console.log(`✅ Successfully saved article: ${article.title} (${scrapingData.content_source} content, ${scrapingData.content_length} chars)`);
     } else {
       console.error(`❌ Failed to save article after retries: ${article.title}`);
     }

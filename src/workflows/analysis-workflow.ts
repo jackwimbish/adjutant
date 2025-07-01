@@ -4,6 +4,7 @@ import { type NewsSource } from '../config/sources';
 import { preprocessArticle } from './nodes/preprocess';
 import { analyzeArticle } from './nodes/analyze';
 import { qualityCheckNode } from './nodes/quality-check';
+import { scrapeContentNode } from './nodes/content-scraper';
 
 /**
  * Custom workflow system that provides the same benefits as LangGraph:
@@ -49,9 +50,15 @@ export class AnalysisWorkflow {
         return state;
       }
       
-      // If quality check passed (no issues), we're done!
+      // If quality check passed (no issues), proceed to content scraping!
       if (state.quality_issues.length === 0 && state.analysis_result) {
-        console.log(`✅ Analysis completed successfully for: ${state.article.title}`);
+        console.log(`✅ Analysis completed successfully, starting content scraping for: ${state.article.title}`);
+        
+        // Step 4: Scrape full content
+        const scrapingResult = await scrapeContentNode(state);
+        state = { ...state, ...scrapingResult };
+        
+        console.log(`🎉 Complete workflow finished for: ${state.article.title} (${state.content_source} content)`);
         return state;
       }
       
@@ -70,7 +77,7 @@ export class AnalysisWorkflow {
     return state;
   }
   
-  public async analyzeArticle(article: RSSItem, source: NewsSource): Promise<AnalysisResult | null> {
+  public async analyzeArticle(article: RSSItem, source: NewsSource): Promise<AnalysisState | null> {
     try {
       // Initialize workflow state
       const initialState: AnalysisState = {
@@ -88,7 +95,7 @@ export class AnalysisWorkflow {
         return null;
       }
       
-      return finalState.analysis_result;
+      return finalState;
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -98,7 +105,7 @@ export class AnalysisWorkflow {
   }
   
   public getStatus(): string {
-    return 'Custom Analysis Workflow: Active (preprocess → analyze → quality_check → retry_logic)';
+    return 'Enhanced Analysis Workflow: Active (preprocess → analyze → quality_check → content_scraping → retry_logic)';
   }
 }
 
@@ -109,7 +116,7 @@ export const analysisWorkflow = new AnalysisWorkflow();
 export async function analyzeArticleWithWorkflow(
   article: RSSItem,
   source: NewsSource
-): Promise<AnalysisResult | null> {
+): Promise<AnalysisState | null> {
   return analysisWorkflow.analyzeArticle(article, source);
 }
 

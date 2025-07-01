@@ -18,7 +18,8 @@ export interface ArticleData {
   url: string;
   title: string;
   author: string;
-  full_content_text: string;
+  rss_excerpt: string;          // Original RSS content (may contain HTML)
+  full_content_text: string;    // Scraped full article (clean text)
   source_name: string;
   published_at: Date;
   fetched_at: Date;
@@ -28,4 +29,9 @@ export interface ArticleData {
   is_read: boolean;
   is_hidden: boolean;
   is_favorite: boolean;
+  // Content scraping metadata
+  content_source: 'rss' | 'scraped' | 'failed';
+  scraping_status: 'pending' | 'success' | 'failed';
+  scraping_error?: string | null;
+  content_length: number;       // Character count of full content
 } 

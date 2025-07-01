@@ -1,11 +1,15 @@
 {
   "name": "adjutant",
   "version": "1.0.0",
-  "description": "An intelligent news aggregator.",
+  "description": "An intelligent news aggregator with AI-powered article analysis and real-time display.",
   "main": "dist/main.js",
   "scripts": {
     "start": "npm run build && electron .",
-    "build": "tsc"
+    "build": "tsc",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "pack": "npm run build && electron-builder --dir",
+    "release": "./scripts/release.sh"
   },
   "keywords": [],
   "author": "",
@@ -14,13 +18,50 @@
     "@langchain/core": "^0.2.1",
     "@langchain/langgraph": "^0.0.28",
     "@langchain/openai": "^0.5.16",
+    "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.0.1",
-    "electron": "^31.0.2",
     "firebase": "^10.12.2",
+    "jsdom": "^26.1.0",
     "openai": "^4.52.0",
+    "puppeteer": "^24.11.2",
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "electron": "^31.0.2",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.4.5"
+  },
+  "build": {
+    "appId": "com.adjutant.app",
+    "productName": "Adjutant",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist/**/*",
+      "index.html",
+      "env.example",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    },
+    "dmg": {
+      "title": "Adjutant",
+      "contents": [
+        {
+          "x": 110,
+          "y": 150
+        },
+        {
+          "x": 240,
+          "y": 150,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }

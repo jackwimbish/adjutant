@@ -17,6 +17,14 @@ export interface AnalysisState {
   retry_count: number;
   max_retries: number;
   
+  // Content scraping
+  rss_excerpt?: string;
+  full_content_text?: string;
+  content_source?: 'rss' | 'scraped' | 'failed';
+  scraping_status?: 'pending' | 'success' | 'failed';
+  scraping_error?: string | null;
+  content_length?: number;
+  
   // Final result
   analysis_result?: AnalysisResult;
   

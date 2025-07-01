@@ -23,6 +23,7 @@ interface ArticleData {
   url: string;
   title: string;
   author: string;
+  rss_excerpt: string;
   full_content_text: string;
   source_name: string;
   published_at: any; // Firestore Timestamp or Date
@@ -33,6 +34,10 @@ interface ArticleData {
   is_read: boolean;
   is_hidden: boolean;
   is_favorite: boolean;
+  content_source: 'rss' | 'scraped' | 'failed';
+  scraping_status: 'pending' | 'success' | 'failed';
+  scraping_error?: string | null;
+  content_length: number;
 }
 
 console.log('Renderer script loaded.');
@@ -132,15 +137,31 @@ function createArticleElement(article: ArticleData): HTMLElement {
     publishedDate = 'Unknown date';
   }
   
+  // Create unique ID for this article
+  const articleId = `article-${btoa(article.url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16)}`;
+  
+  // Determine content type status for metadata
+  const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
+
   articleElement.innerHTML = `
-    <h2 class="article-title">${escapeHtml(article.title)}</h2>
+    <div class="article-header">
+      <h2 class="article-title">${escapeHtml(article.title)}</h2>
+    </div>
     <p class="article-summary">${escapeHtml(article.ai_summary)}</p>
+    <div class="article-actions">
+      <a href="${escapeHtml(article.url)}" target="_blank" class="read-full-link">
+        Read Full Article ↗
+      </a>
+    </div>
     <div class="article-meta">
       <span>Source: ${escapeHtml(article.source_name)}</span> |
       <span>Published: ${publishedDate}</span> |
-      <span>Score: ${article.ai_score.toFixed(1)}</span>
+      <span>Score: ${article.ai_score.toFixed(1)}</span> |
+      <span>${contentTypeIcon} ${article.content_source}</span>
     </div>
   `;
+  
+  // No expand/collapse functionality needed anymore
   
   return articleElement;
 }
@@ -150,3 +171,5 @@ function escapeHtml(text: string): string {
   div.textContent = text;
   return div.innerHTML;
 }
+
+// formatContent function removed since we no longer display scraped content in the UI
