@@ -25,3 +25,27 @@
 - The project uses Firebase Firestore as its database.
 - The AI processing is handled by LangGraph and the OpenAI API.
 - Follow a clean, modular coding style. Add comments for complex logic.
+
+## API Keys and secrets
+
+This project uses a `.env` file in the root directory to manage secret keys and configuration, which is gitignored for security.
+
+Specifically, the Firebase configuration is loaded from the following 6 environment variables:
+- `FIREBASE_API_KEY`
+- `FIREBASE_AUTH_DOMAIN`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_STORAGE_BUCKET`
+- `FIREBASE_MESSAGING_SENDER_ID`
+- `FIREBASE_APP_ID`
+
+These variables are loaded into the application using the `dotenv` package. In the code, they should be accessed via `process.env.VARIABLE_NAME`. For example, the Firebase config object is constructed like this:
+
+```typescript
+import 'dotenv/config';
+
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  // ... and so on for all 6 variables
+};
+
