@@ -1,0 +1,28 @@
+# Dependencies
+/node_modules
+
+# Compiled TypeScript/JavaScript Output
+/dist
+
+# Build and Packaging Output
+/release-builds
+/out
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables
+# Never commit your API keys or other secrets!
+.env
+.env.local
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor specific
+.idea
+.vscode

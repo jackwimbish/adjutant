@@ -1,0 +1,23 @@
+{
+  "name": "adjutant",
+  "version": "1.0.0",
+  "description": "An intelligent news aggregator.",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "npm run build && electron .",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@langchain/core": "^0.2.1",
+    "@langchain/langgraph": "^0.0.28",
+    "electron": "^31.0.2",
+    "firebase": "^10.12.2",
+    "openai": "^4.52.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
