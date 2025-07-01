@@ -1,24 +1,17 @@
 // src/workflow.ts
 import 'dotenv/config';
 import { collection, doc, setDoc, terminate, getDoc } from 'firebase/firestore';
-import OpenAI from 'openai';
 import RssParser from 'rss-parser';
 import { createHash } from 'crypto';
 import { DEFAULT_SOURCES, type NewsSource } from './config/sources';
-import { CONFIG } from './config/settings';
 import { type AnalysisResult, type RSSItem, type ArticleData } from './types';
-import { buildAnalysisPrompt } from './prompts/analysis-prompt';
 import { initializeFirebaseApp, initializeFirestore } from './services/firebase';
 import { withRetry } from './utils/retry';
+import { analyzeArticleWithWorkflow, getWorkflowStatus } from './workflows/analysis-workflow';
 
 console.log('Workflow script started...');
 
 // 1. --- INITIALIZE SERVICES ---
-
-// Initialize OpenAI client using environment variable
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 // Initialize Firebase using centralized service
 const firebaseApp = initializeFirebaseApp();
@@ -26,6 +19,9 @@ const db = initializeFirestore(firebaseApp);
 const articlesCollection = collection(db, 'articles');
 
 const parser = new RssParser();
+
+// Log the active workflow system
+getWorkflowStatus().then(status => console.log('📋', status));
 
 // 2. --- FETCHING ARTICLES ---
 
@@ -48,26 +44,12 @@ async function fetchArticlesFromSource(source: NewsSource): Promise<RSSItem[]> {
   }
 }
 
-// 3. --- AI ANALYSIS ---
-
-async function analyzeArticleContent(content: string): Promise<AnalysisResult | null> {
-  const truncatedContent = content.substring(0, CONFIG.AI_CONTENT_MAX_LENGTH);
-  const prompt = buildAnalysisPrompt(truncatedContent);
-
-  return await withRetry(async () => {
-    const response = await openai.chat.completions.create({
-      model: CONFIG.AI_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: "json_object" },
-    });
-    
-    const resultJson = response.choices[0].message.content;
-    if (!resultJson) {
-      throw new Error('No content received from OpenAI');
-    }
-    return JSON.parse(resultJson) as AnalysisResult;
-  }, 3, 2000); // 3 retries with 2 second base delay
-}
+// 3. --- AI ANALYSIS (Now handled by LangGraph-style workflow) ---
+// The analyzeArticleWithWorkflow function provides:
+// - Multi-step preprocessing, analysis, and quality validation
+// - Automatic retry logic with improved prompts
+// - Better error handling and logging
+// - Foundation for future adaptive learning features
 
 // 4. --- MAIN PROCESSING LOOP ---
 
@@ -153,7 +135,6 @@ async function shouldSkipArticle(article: RSSItem): Promise<boolean> {
 }
 
 async function processArticle(article: RSSItem, source: NewsSource) {
-  const content = article.content || article.contentSnippet || article.summary || '';
   const articleId = createIdFromUrl(article.link!);
   
   // Check if article already exists to avoid re-processing
@@ -162,11 +143,14 @@ async function processArticle(article: RSSItem, source: NewsSource) {
     return;
   }
   
-  console.log(`Processing article: ${article.title}`);
+  console.log(`🔄 Processing article: ${article.title}`);
 
-  const analysis = await analyzeArticleContent(content);
+  // Use the new LangGraph-style workflow for analysis
+  const analysis = await analyzeArticleWithWorkflow(article, source);
 
   if (analysis) {
+    // Get content for storage (the workflow already processed it)
+    const content = article.content || article.contentSnippet || article.summary || '';
     const articleData = createArticleData(article, content, analysis, source);
     
     // Save the structured data to Firestore with retry logic
@@ -176,10 +160,12 @@ async function processArticle(article: RSSItem, source: NewsSource) {
     });
     
     if (saveResult) {
-      console.log(`Successfully saved article: ${article.title}`);
+      console.log(`✅ Successfully saved article: ${article.title}`);
     } else {
-      console.error(`Failed to save article after retries: ${article.title}`);
+      console.error(`❌ Failed to save article after retries: ${article.title}`);
     }
+  } else {
+    console.log(`⏭️  Skipped article after workflow analysis: ${article.title}`);
   }
 }
 
