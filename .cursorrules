@@ -1,0 +1,27 @@
+## Project Context Rule
+
+**For queries about:**
+- "What is this project's architecture|data model|plan|overview|stack?"
+- "How does this app work?"
+- "Tell me about this project."
+
+**Read these files first:**
+- `_docs/project-overview.md`
+- `_docs/data-model.md`
+- `_docs/development-plan.md`
+
+## Universal Rules
+
+### Always Ignore
+- `node_modules`
+- `dist`
+- `release-builds`
+- `out`
+- `package-lock.json`
+- `.git`
+
+### Project Hints
+- This is an Electron application written in TypeScript.
+- The project uses Firebase Firestore as its database.
+- The AI processing is handled by LangGraph and the OpenAI API.
+- Follow a clean, modular coding style. Add comments for complex logic.
