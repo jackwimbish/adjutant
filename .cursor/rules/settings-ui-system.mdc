@@ -1,0 +1,60 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Settings UI System
+
+## Overview
+Adjutant features a comprehensive settings interface that allows users to configure API keys, test connections, and manage their configuration through a dedicated modal window.
+
+## Settings Window Components
+- **HTML Interface**: [src/windows/settings.html](mdc:src/windows/settings.html) - Professional dark-themed form
+- **Preload Script**: [src/windows/settings-preload.ts](mdc:src/windows/settings-preload.ts) - Secure IPC bridge
+- **Renderer Logic**: [src/windows/settings.js](mdc:src/windows/settings.js) - Form handling and validation
+
+## User Experience Flow
+1. **First Launch**: Settings window opens automatically for API key configuration
+2. **Main Interface**: ⚙️ Settings button in header (added to [index.html](mdc:index.html))
+3. **Menu Access**: "Settings..." menu item with Cmd+, keyboard shortcut
+4. **Live Testing**: Built-in API connection testing for Firebase and OpenAI
+
+## IPC Communication
+The settings system uses secure IPC handlers defined in [src/main.ts](mdc:src/main.ts):
+
+```typescript
+// Settings IPC handlers
+ipcMain.handle('settings:load-config', async () => loadUserConfig())
+ipcMain.handle('settings:save-config', async (event, config: UserConfig) => saveUserConfig(config))
+ipcMain.handle('settings:test-firebase', async (event, firebaseConfig) => testFirebaseConnection(firebaseConfig))
+ipcMain.handle('settings:test-openai', async (event, openaiConfig) => testOpenAIConnection(openaiConfig))
+ipcMain.on('open-settings', () => createSettingsWindow())
+```
+
+## Window Management
+- **Modal Design**: Settings window is modal to main window
+- **Single Instance**: Prevents multiple settings windows, focuses existing
+- **Auto-close**: Closes automatically after successful configuration save
+- **Parent Relationship**: Modal relationship with main window for proper UX
+
+## API Testing Features
+- **Firebase Test**: Validates all 6 Firebase configuration fields with live connection test
+- **OpenAI Test**: Tests API key validity with actual OpenAI API call
+- **Real-time Feedback**: Success/error messages with specific error details
+- **Form Validation**: Client-side validation with helpful error messages
+
+## Build Considerations
+Settings files must be manually copied to dist directory after TypeScript compilation:
+
+```bash
+cp src/windows/settings.html dist/windows/
+cp src/windows/settings.js dist/windows/
+```
+
+This is required because TypeScript only compiles `.ts` files, not `.html` and `.js` assets.
+
+## Security Features
+- **Context Isolation**: Settings window uses context isolation and secure preload scripts
+- **No Node Integration**: Settings renderer has no direct Node.js access
+- **IPC Validation**: All configuration data validated before saving
+- **Error Handling**: Comprehensive error handling for network and validation failures

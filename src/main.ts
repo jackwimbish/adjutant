@@ -95,6 +95,15 @@ ipcMain.on('settings:close-window', () => {
   }
 });
 
+// Handle opening settings from main interface
+ipcMain.on('open-settings', () => {
+  if (!settingsWindow || settingsWindow.isDestroyed()) {
+    createSettingsWindow();
+  } else {
+    settingsWindow.focus();
+  }
+});
+
 // Setup IPC handler for Firebase config (for backward compatibility with renderer)
 ipcMain.handle('get-firebase-config', () => {
   if (!userConfig) {

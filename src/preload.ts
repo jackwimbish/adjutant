@@ -5,6 +5,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Expose method to get Firebase config
   getFirebaseConfig: () => ipcRenderer.invoke('get-firebase-config'),
+  
+  // Expose method to open settings window
+  openSettings: () => ipcRenderer.send('open-settings'),
 });
 
 // Expose a promise-based Firebase config getter

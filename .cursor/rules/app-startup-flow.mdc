@@ -1,0 +1,106 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Application Startup Flow
+
+## Overview
+Adjutant implements a smart startup flow that automatically detects configuration status and guides users through setup when needed.
+
+## Startup Decision Logic
+The application startup flow in [src/main.ts](mdc:src/main.ts) follows this logic:
+
+```typescript
+async function initializeApp(): Promise<void> {
+  // Try to load existing configuration
+  userConfig = loadUserConfig();
+  
+  if (!userConfig || !isConfigValid(userConfig) || userConfig.firstRun) {
+    // Show settings window first for configuration
+    createSettingsWindow();
+    // Wait for configuration before starting main app
+  } else {
+    // Valid configuration found, start main application
+    createMainWindow();
+    startWorkflow();
+  }
+}
+```
+
+## Configuration States
+
+### First Run (No Config)
+- **Condition**: No config file exists in user data directory
+- **Behavior**: Opens settings window automatically
+- **User Experience**: Welcome setup flow with API key configuration
+- **Next Step**: Main app starts after successful configuration save
+
+### Invalid Config
+- **Condition**: Config file exists but fails validation
+- **Behavior**: Opens settings window with existing values pre-filled
+- **User Experience**: User can correct invalid configuration
+- **Fallback**: Previous config values loaded for easy correction
+
+### Valid Config
+- **Condition**: Valid configuration found with all required fields
+- **Behavior**: Starts main application immediately
+- **User Experience**: Direct access to news dashboard
+- **Background**: Workflow system starts automatically
+
+## Configuration Loading
+Configuration is loaded in multiple contexts:
+
+### Main Process (Electron)
+- **Location**: [src/main.ts](mdc:src/main.ts)
+- **Method**: Uses `app.getPath('userData')` for Electron user data directory
+- **Purpose**: Window management and IPC handling
+
+### Workflow Process (Node.js)
+- **Location**: [src/workflow.ts](mdc:src/workflow.ts)
+- **Method**: Platform-specific path construction (fallback for Node.js)
+- **Purpose**: Background article processing and AI analysis
+
+### Cross-Platform Path Resolution
+The [src/config/user-config.ts](mdc:src/config/user-config.ts) `getConfigPath()` function handles both contexts:
+
+```typescript
+export function getConfigPath(): string {
+  try {
+    // Try Electron's app.getPath() if available
+    const { app } = require('electron');
+    return path.join(app.getPath('userData'), CONFIG_FILE_NAME);
+  } catch (error) {
+    // Fallback for Node.js: construct path manually
+    return constructPlatformSpecificPath();
+  }
+}
+```
+
+## User Experience Scenarios
+
+### New User Journey
+1. **App Launch**: No configuration detected
+2. **Settings Window**: Opens automatically with welcome message
+3. **API Configuration**: User enters Firebase and OpenAI credentials
+4. **Live Testing**: User can test connections before saving
+5. **Save & Continue**: Configuration saved, main app opens
+6. **Background Processing**: Workflow starts fetching articles
+
+### Returning User Journey
+1. **App Launch**: Valid configuration detected
+2. **Main Window**: Opens immediately with saved configuration
+3. **Article Dashboard**: Shows previously processed articles
+4. **Background Sync**: New articles processed automatically
+5. **Settings Access**: Available via ⚙️ button or Cmd+, for changes
+
+## Error Handling
+- **Invalid Config**: Graceful fallback to settings window
+- **Missing Fields**: Validation prevents partial configuration
+- **Network Errors**: Handled gracefully in API testing
+- **File System Errors**: Logged with appropriate user feedback
+
+## Development vs Production
+- **Development**: Uses 'adjutant' directory name (matches package.json)
+- **Production**: Uses 'Adjutant' directory name (matches productName)
+- **Path Detection**: Automatic based on Electron context availability

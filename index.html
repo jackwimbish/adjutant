@@ -209,13 +209,55 @@
             opacity: 0.7;
             margin-top: 10px;
         }
+        
+        /* Settings button styles */
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .header-content {
+            flex: 1;
+        }
+        .settings-btn {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: var(--accent-color);
+            border: 1px solid var(--accent-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+        }
+        .settings-btn:hover {
+            background-color: var(--accent-color);
+            color: var(--background-color);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 170, 255, 0.3);
+        }
+        .settings-btn:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Adjutant</h1>
-        <p style="margin: 5px 0 0 0; opacity: 0.7; font-size: 0.9em;">Personal News Intelligence Dashboard</p>
+        <div class="header-controls">
+            <div class="header-content">
+                <h1>Adjutant</h1>
+                <p style="margin: 5px 0 0 0; opacity: 0.7; font-size: 0.9em;">Personal News Intelligence Dashboard</p>
+            </div>
+            <button id="settings-btn" class="settings-btn">
+                ⚙️ Settings
+            </button>
+        </div>
     </header>
 
     <main class="main-container">
@@ -272,14 +314,31 @@
             }
         }
         
+        // Add settings button click handler
+        function setupSettingsButton() {
+            const settingsBtn = document.getElementById('settings-btn');
+            if (settingsBtn) {
+                settingsBtn.addEventListener('click', () => {
+                    console.log('HTML: Settings button clicked');
+                    if (window.electronAPI && window.electronAPI.openSettings) {
+                        window.electronAPI.openSettings();
+                    } else {
+                        console.error('HTML: electronAPI.openSettings not available');
+                    }
+                });
+            }
+        }
+        
         // Start when page loads
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 console.log('HTML: DOMContentLoaded fired');
+                setupSettingsButton();
                 loadRendererWithConfig();
             });
         } else {
             console.log('HTML: DOM already ready');
+            setupSettingsButton();
             loadRendererWithConfig();
         }
     </script>

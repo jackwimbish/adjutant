@@ -1,0 +1,62 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# User Configuration System
+
+## Overview
+Adjutant uses a **secure user configuration system** that stores API keys and settings in the user's data directory at runtime.
+
+## Configuration Storage Locations
+- **Development**: `~/Library/Application Support/adjutant/config.json`
+- **Production**: `~/Library/Application Support/Adjutant/config.json`
+- **Windows**: `%APPDATA%/adjutant/config.json` (dev) or `%APPDATA%/Adjutant/config.json` (prod)
+- **Linux**: `~/.config/adjutant/config.json` (dev) or `~/.config/Adjutant/config.json` (prod)
+
+## Configuration Management
+The user configuration is managed by [src/config/user-config.ts](mdc:src/config/user-config.ts) and follows this structure:
+
+```typescript
+interface UserConfig {
+  firebase: {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+  };
+  openai: {
+    apiKey: string;
+  };
+  firstRun: boolean;
+}
+```
+
+## Key Functions
+- `loadUserConfig()` - Load configuration from user data directory
+- `saveUserConfig(config)` - Save configuration to user data directory
+- `isConfigValid(config)` - Validate configuration structure
+- `getConfigPath()` - Get platform-specific config file path (works in both Electron and Node.js)
+
+## Security Principles
+1. **Runtime loading**: Configuration is loaded from user data directory at startup
+2. **Parameter passing**: Services accept config as parameters instead of using environment variables
+3. **User ownership**: Each user manages their own API keys and quotas
+
+## Service Integration
+Services like [src/services/firebase.ts](mdc:src/services/firebase.ts) and workflow nodes accept configuration as parameters:
+
+```typescript
+// Firebase service
+export function initializeFirebaseApp(firebaseConfig: UserConfig['firebase']): FirebaseApp
+
+// Analysis workflow
+export async function analyzeArticleWithWorkflow(
+  article: RSSItem,
+  source: NewsSource,
+  userConfig: UserConfig
+): Promise<AnalysisState | null>
+```
+
