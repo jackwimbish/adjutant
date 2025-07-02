@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
@@ -20,9 +20,10 @@ export async function scrapeArticleContent(url: string): Promise<ScrapedContent>
   try {
     console.log(`🕷️  Starting content scraping for: ${url}`);
     
-    // Launch headless browser
+    // Launch headless browser using Electron's bundled Chromium
     browser = await puppeteer.launch({
       headless: true,
+      executablePath: process.execPath, // Use current Electron executable
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',

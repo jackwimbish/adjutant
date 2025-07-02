@@ -1,12 +1,11 @@
-import { ChatOpenAI } from '@langchain/openai';
+import OpenAI from 'openai';
 import { CONFIG } from '../../config/settings';
 import { buildInitialAnalysisPrompt, buildRetryAnalysisPrompt } from '../../prompts/langgraph-prompts';
 import { type AnalysisState } from '../types';
 import { type AnalysisResult } from '../../types';
 
 // Initialize OpenAI client
-const llm = new ChatOpenAI({
-  modelName: CONFIG.AI_MODEL,
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -25,11 +24,16 @@ export async function analyzeArticle(state: AnalysisState): Promise<Partial<Anal
     
     console.log(`Analysis attempt ${state.retry_count + 1}/${state.max_retries + 1}`);
     
-    const response = await llm.invoke([
-      { role: 'user', content: prompt }
-    ]);
+    const response = await openai.chat.completions.create({
+      model: CONFIG.AI_MODEL,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.1,
+      max_tokens: 1000
+    });
     
-    const resultJson = response.content as string;
+    const resultJson = response.choices[0]?.message?.content;
     if (!resultJson) {
       throw new Error('No content received from OpenAI');
     }

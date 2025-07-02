@@ -15,15 +15,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@langchain/core": "^0.2.1",
-    "@langchain/langgraph": "^0.0.28",
-    "@langchain/openai": "^0.5.16",
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.0.1",
     "firebase": "^10.12.2",
     "jsdom": "^26.1.0",
     "openai": "^4.52.0",
-    "puppeteer": "^24.11.2",
+    "puppeteer-core": "^24.11.2",
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
@@ -42,7 +39,14 @@
       "dist/**/*",
       "index.html",
       "env.example",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/**/*.md",
+      "!node_modules/**/test/**",
+      "!node_modules/**/tests/**",
+      "!node_modules/**/*.test.js",
+      "!node_modules/**/*.spec.js",
+      "!node_modules/**/docs/**",
+      "!node_modules/**/examples/**"
     ],
     "mac": {
       "category": "public.app-category.productivity",
