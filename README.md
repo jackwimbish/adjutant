@@ -25,7 +25,7 @@ Adjutant is an intelligent news aggregation desktop application built with Elect
 
 ### 🔄 **Automated Workflow**
 - Fetches articles every 30 minutes automatically
-- Processes articles through a sophisticated LangGraph-style pipeline
+- Processes articles through a sophisticated multi-step pipeline
 - Stores full article content and analysis in Firebase Firestore
 - Duplicate detection prevents redundant processing
 
@@ -94,7 +94,7 @@ Simply run Adjutant from your Applications folder. The app will:
 
 ## Article Processing Workflow
 
-Adjutant uses a sophisticated multi-step pipeline inspired by LangGraph to process articles:
+Adjutant uses a sophisticated multi-step pipeline with state management to process articles:
 
 ### 1. **RSS Fetching**
 ```
@@ -256,7 +256,7 @@ npm run release     # Complete build with instructions
 - **Frontend**: Electron with TypeScript, HTML/CSS, Firebase SDK
 - **Backend**: Node.js workflow with OpenAI integration  
 - **Database**: Firebase Firestore with real-time listeners
-- **AI Processing**: Custom LangGraph-style workflow with quality validation
+- **AI Processing**: Custom multi-step workflow with quality validation and retry logic
 - **Content Extraction**: Puppeteer + Mozilla Readability
 - **Distribution**: electron-builder with DMG packaging
 
