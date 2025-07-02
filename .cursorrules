@@ -26,26 +26,47 @@
 - The AI processing is handled by LangGraph and the OpenAI API.
 - Follow a clean, modular coding style. Add comments for complex logic.
 
-## API Keys and secrets
+## API Keys and Configuration
 
-This project uses a `.env` file in the root directory to manage secret keys and configuration, which is gitignored for security.
+This project uses a **user configuration system** that stores API keys and settings in the user's data directory at runtime, ensuring no sensitive information is bundled with the distributed application.
 
-Specifically, the Firebase configuration is loaded from the following 6 environment variables:
-- `FIREBASE_API_KEY`
-- `FIREBASE_AUTH_DOMAIN`
-- `FIREBASE_PROJECT_ID`
-- `FIREBASE_STORAGE_BUCKET`
-- `FIREBASE_MESSAGING_SENDER_ID`
-- `FIREBASE_APP_ID`
+### Configuration Storage
+- **Development**: `~/Library/Application Support/adjutant/config.json`
+- **Production**: `~/Library/Application Support/Adjutant/config.json`
+- **Windows**: `%APPDATA%/adjutant/config.json` (dev) or `%APPDATA%/Adjutant/config.json` (prod)
+- **Linux**: `~/.config/adjutant/config.json` (dev) or `~/.config/Adjutant/config.json` (prod)
 
-These variables are loaded into the application using the `dotenv` package. In the code, they should be accessed via `process.env.VARIABLE_NAME`. For example, the Firebase config object is constructed like this:
+### Configuration Structure
+The user configuration is managed by `src/config/user-config.ts` and follows this structure:
 
 ```typescript
-import 'dotenv/config';
+interface UserConfig {
+  firebase: {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+  };
+  openai: {
+    apiKey: string;
+  };
+  firstRun: boolean;
+}
+```
 
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  // ... and so on for all 6 variables
-};
+### How Configuration Works
+1. **First Launch**: Settings window opens automatically for API key configuration
+2. **Settings UI**: Accessible via Menu → Settings (Cmd+,) with live API testing
+3. **Runtime Loading**: Configuration loaded from user data directory at app startup
+4. **Service Integration**: Config passed to Firebase and OpenAI services as parameters
+5. **Security**: No API keys bundled in distributed app, stored only in user's local directory
 
+### Code Usage
+In the codebase, configuration is accessed through:
+- `loadUserConfig()` - Load configuration from user data directory
+- `saveUserConfig(config)` - Save configuration to user data directory
+- Services accept config as parameters instead of using environment variables
+
+**Note**: The `.env` file and `dotenv` dependency were removed in favor of this secure user configuration system.

@@ -16,7 +16,6 @@
   "license": "ISC",
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "dotenv": "^17.0.1",
     "firebase": "^10.12.2",
     "jsdom": "^26.1.0",
     "openai": "^4.52.0",

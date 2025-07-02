@@ -1,11 +1,15 @@
 import { type RSSItem, type AnalysisResult } from '../types';
 import { type NewsSource } from '../config/sources';
+import { type UserConfig } from '../config/user-config';
 
 export interface AnalysisState {
   // Input data
   article: RSSItem;
   source: NewsSource;
   content: string;
+  
+  // User configuration
+  userConfig?: UserConfig;
   
   // Analysis results
   ai_summary?: string;

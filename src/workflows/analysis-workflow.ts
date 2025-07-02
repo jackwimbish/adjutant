@@ -1,6 +1,7 @@
 import { type AnalysisState, INITIAL_STATE } from './types';
 import { type RSSItem, type AnalysisResult } from '../types';
 import { type NewsSource } from '../config/sources';
+import { type UserConfig } from '../config/user-config';
 import { preprocessArticle } from './nodes/preprocess';
 import { analyzeArticle } from './nodes/analyze';
 import { qualityCheckNode } from './nodes/quality-check';
@@ -77,13 +78,14 @@ export class AnalysisWorkflow {
     return state;
   }
   
-  public async analyzeArticle(article: RSSItem, source: NewsSource): Promise<AnalysisState | null> {
+  public async analyzeArticle(article: RSSItem, source: NewsSource, userConfig: UserConfig): Promise<AnalysisState | null> {
     try {
       // Initialize workflow state
       const initialState: AnalysisState = {
         article,
         source,
         content: '',
+        userConfig,
         ...INITIAL_STATE
       } as AnalysisState;
       
@@ -115,9 +117,10 @@ export const analysisWorkflow = new AnalysisWorkflow();
 // Convenience function that matches the expected interface
 export async function analyzeArticleWithWorkflow(
   article: RSSItem,
-  source: NewsSource
+  source: NewsSource,
+  userConfig: UserConfig
 ): Promise<AnalysisState | null> {
-  return analysisWorkflow.analyzeArticle(article, source);
+  return analysisWorkflow.analyzeArticle(article, source, userConfig);
 }
 
 export async function getWorkflowStatus(): Promise<string> {

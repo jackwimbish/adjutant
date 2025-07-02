@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adjutant Settings</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .settings-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #4CAF50;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #b0b0b0;
+            font-size: 14px;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        input[type="text"]:invalid, input[type="password"]:invalid {
+            border-color: #f44336;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .btn-test {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+            font-size: 12px;
+            padding: 8px 16px;
+            min-width: 80px;
+        }
+
+        .btn-test:hover {
+            background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+            transform: translateY(-1px);
+        }
+
+        .test-button-container {
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .status-message.show {
+            opacity: 1;
+        }
+
+        .status-success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .status-error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+
+        .status-info {
+            background: rgba(33, 150, 243, 0.2);
+            color: #2196F3;
+            border: 1px solid rgba(33, 150, 243, 0.3);
+        }
+
+        .required {
+            color: #f44336;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+            line-height: 1.4;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .loading {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="settings-container">
+        <h1>Adjutant Configuration</h1>
+        
+        <form id="settings-form">
+            <!-- Firebase Configuration -->
+            <div class="form-section">
+                <div class="section-title">Firebase Configuration</div>
+                
+                <div class="form-group">
+                    <label for="firebase-api-key">API Key <span class="required">*</span></label>
+                    <input type="password" id="firebase-api-key" name="firebase-api-key" required>
+                    <div class="help-text">Your Firebase project's API key</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-auth-domain">Auth Domain <span class="required">*</span></label>
+                    <input type="text" id="firebase-auth-domain" name="firebase-auth-domain" required>
+                    <div class="help-text">Usually: your-project.firebaseapp.com</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-project-id">Project ID <span class="required">*</span></label>
+                    <input type="text" id="firebase-project-id" name="firebase-project-id" required>
+                    <div class="help-text">Your Firebase project identifier</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-storage-bucket">Storage Bucket <span class="required">*</span></label>
+                    <input type="text" id="firebase-storage-bucket" name="firebase-storage-bucket" required>
+                    <div class="help-text">Usually: your-project.appspot.com</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-messaging-sender-id">Messaging Sender ID <span class="required">*</span></label>
+                    <input type="text" id="firebase-messaging-sender-id" name="firebase-messaging-sender-id" required>
+                    <div class="help-text">Numeric ID for Firebase messaging</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-app-id">App ID <span class="required">*</span></label>
+                    <input type="text" id="firebase-app-id" name="firebase-app-id" required>
+                    <div class="help-text">Your Firebase app identifier</div>
+                </div>
+
+                <div class="test-button-container">
+                    <button type="button" id="test-firebase" class="btn-test">Test Firebase</button>
+                </div>
+            </div>
+
+            <!-- OpenAI Configuration -->
+            <div class="form-section">
+                <div class="section-title">OpenAI Configuration</div>
+                
+                <div class="form-group">
+                    <label for="openai-api-key">API Key <span class="required">*</span></label>
+                    <input type="password" id="openai-api-key" name="openai-api-key" required>
+                    <div class="help-text">Your OpenAI API key (starts with sk-)</div>
+                </div>
+
+                <div class="test-button-container">
+                    <button type="button" id="test-openai" class="btn-test">Test OpenAI</button>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="status-message" class="status-message"></div>
+
+            <!-- Action Buttons -->
+            <div class="button-group">
+                <button type="button" id="cancel-btn" class="btn-secondary">Cancel</button>
+                <button type="submit" id="save-btn" class="btn-primary">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+
+</html> 

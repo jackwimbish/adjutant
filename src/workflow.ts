@@ -1,5 +1,4 @@
 // src/workflow.ts
-import 'dotenv/config';
 import { collection, doc, setDoc, terminate, getDoc } from 'firebase/firestore';
 import RssParser from 'rss-parser';
 import { createHash } from 'crypto';
@@ -8,13 +7,24 @@ import { type AnalysisResult, type RSSItem, type ArticleData } from './types';
 import { initializeFirebaseApp, initializeFirestore } from './services/firebase';
 import { withRetry } from './utils/retry';
 import { analyzeArticleWithWorkflow, getWorkflowStatus } from './workflows/analysis-workflow';
+import { loadUserConfig, isConfigValid } from './config/user-config';
 
 console.log('Workflow script started...');
 
+// Load user configuration
+const userConfig = loadUserConfig();
+
+if (!userConfig || !isConfigValid(userConfig)) {
+  console.error('❌ No valid user configuration found. Please configure the app first.');
+  process.exit(1);
+}
+
+console.log('✅ User configuration loaded successfully');
+
 // 1. --- INITIALIZE SERVICES ---
 
-// Initialize Firebase using centralized service
-const firebaseApp = initializeFirebaseApp();
+// Initialize Firebase using centralized service with user config
+const firebaseApp = initializeFirebaseApp(userConfig.firebase);
 const db = initializeFirestore(firebaseApp);
 const articlesCollection = collection(db, 'articles');
 
@@ -158,8 +168,8 @@ async function processArticle(article: RSSItem, source: NewsSource) {
   
   console.log(`🔄 Processing article: ${article.title}`);
 
-  // Use the new LangGraph-style workflow for analysis
-  const analysis = await analyzeArticleWithWorkflow(article, source);
+  // Use the new LangGraph-style workflow for analysis, passing user config
+  const analysis = await analyzeArticleWithWorkflow(article, source, userConfig!);
 
   if (analysis && analysis.analysis_result) {
     // The workflow has completed with both analysis and scraping data

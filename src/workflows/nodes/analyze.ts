@@ -4,11 +4,6 @@ import { buildInitialAnalysisPrompt, buildRetryAnalysisPrompt } from '../../prom
 import { type AnalysisState } from '../types';
 import { type AnalysisResult } from '../../types';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function analyzeArticle(state: AnalysisState): Promise<Partial<AnalysisState>> {
   console.log(`Analyzing article: ${state.article.title}`);
   
@@ -16,7 +11,19 @@ export async function analyzeArticle(state: AnalysisState): Promise<Partial<Anal
     return { should_skip: true };
   }
   
+  if (!state.userConfig?.openai?.apiKey) {
+    return {
+      should_skip: true,
+      error: 'No OpenAI API key available in configuration'
+    };
+  }
+  
   try {
+    // Initialize OpenAI client with config from user
+    const openai = new OpenAI({
+      apiKey: state.userConfig.openai.apiKey,
+    });
+    
     // Choose prompt based on whether this is a retry
     const prompt = state.retry_count > 0 
       ? buildRetryAnalysisPrompt(state.content, state.quality_issues)
