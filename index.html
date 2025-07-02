@@ -24,6 +24,7 @@
             color: var(--text-color);
             margin: 0;
             padding: 20px;
+            overflow-x: hidden;
         }
         header {
             border-bottom: 2px solid var(--border-color);
@@ -33,6 +34,42 @@
         h1 {
             color: var(--accent-color);
             margin: 0;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .column {
+            flex: 1;
+            min-height: 500px;
+        }
+        .column-header {
+            color: var(--accent-color);
+            margin: 0 0 15px 0;
+            font-size: 1.1em;
+            font-weight: 600;
+            padding: 10px 15px;
+            background-color: var(--primary-color);
+            border-radius: 6px;
+            border-left: 4px solid var(--accent-color);
+        }
+        .article-list {
+            max-height: 80vh;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        .article-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .article-list::-webkit-scrollbar-track {
+            background: var(--primary-color);
+            border-radius: 3px;
+        }
+        .article-list::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 3px;
         }
         .article {
             background-color: var(--primary-color);
@@ -56,6 +93,15 @@
         }
         .article-actions {
             margin: 15px 0 10px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .action-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
         }
         .read-full-link {
             color: var(--accent-color);
@@ -67,12 +113,96 @@
             border: 1px solid var(--accent-color);
             border-radius: 4px;
             transition: all 0.2s ease;
+            align-self: flex-start;
         }
         .read-full-link:hover {
             color: #00ccff;
             background-color: rgba(0, 204, 255, 0.2);
             border-color: #00ccff;
             text-decoration: none;
+        }
+        .rating-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .rating-label {
+            font-size: 0.9em;
+            color: var(--text-color);
+            opacity: 0.8;
+            font-weight: 500;
+        }
+        .rating-btn {
+            padding: 6px 12px;
+            border: 1px solid transparent;
+            border-radius: 20px;
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        .rating-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .rating-btn.positive {
+            border-color: #4CAF50;
+        }
+        .rating-btn.positive:hover {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .rating-btn.neutral {
+            border-color: #FFC107;
+        }
+        .rating-btn.neutral:hover {
+            background-color: #FFC107;
+            color: #1a1a1a;
+        }
+        .rating-btn.negative {
+            border-color: #F44336;
+        }
+        .rating-btn.negative:hover {
+            background-color: #F44336;
+            color: white;
+        }
+        .read-btn {
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 4px;
+            background-color: transparent;
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        .read-btn:hover {
+            background-color: #666;
+            color: white;
+        }
+        .read-status {
+            font-size: 0.8em;
+            color: #4CAF50;
+            font-weight: 500;
+        }
+        /* Greyed out styling for read articles */
+        .article.read {
+            opacity: 0.6;
+            background-color: #2a2a2a;
+        }
+        .article.read .article-title {
+            color: #999;
+        }
+        .article.read .article-summary {
+            color: #888;
+        }
+        .article.read .article-meta {
+            opacity: 0.5;
         }
         .article-meta {
             font-size: 0.8em;
@@ -85,11 +215,22 @@
 
     <header>
         <h1>Adjutant</h1>
+        <p style="margin: 5px 0 0 0; opacity: 0.7; font-size: 0.9em;">Personal News Intelligence Dashboard</p>
     </header>
 
-    <main>
-        <div id="article-list">
-            <p style="color: #888;">Loading application...</p>
+    <main class="main-container">
+        <div class="column unrated-column">
+            <h2 class="column-header">📥 Unrated Articles</h2>
+            <div id="unrated-list" class="article-list">
+                <p style="color: #888;">Loading unrated articles...</p>
+            </div>
+        </div>
+        
+        <div class="column relevant-column">
+            <h2 class="column-header">⭐ Relevant Articles</h2>
+            <div id="relevant-list" class="article-list">
+                <p style="color: #888;">Loading relevant articles...</p>
+            </div>
         </div>
     </main>
 

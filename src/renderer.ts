@@ -34,6 +34,8 @@ interface ArticleData {
   is_read: boolean;
   is_hidden: boolean;
   is_favorite: boolean;
+  user_rating: 'positive' | 'negative' | 'neutral' | null;
+  rated_at?: any;
   content_source: 'rss' | 'scraped' | 'failed';
   scraping_status: 'pending' | 'success' | 'failed';
   scraping_error?: string | null;
@@ -46,12 +48,15 @@ console.log('Renderer script loaded.');
 const config = (window as any).firebaseConfig;
 console.log('Firebase config found:', config);
 
-const articleListDiv = document.getElementById('article-list');
-if (!articleListDiv) {
-  console.error('Article list element not found!');
+const unratedListDiv = document.getElementById('unrated-list');
+const relevantListDiv = document.getElementById('relevant-list');
+
+if (!unratedListDiv || !relevantListDiv) {
+  console.error('Article list elements not found!');
 } else if (!config || !config.apiKey) {
   console.error('Firebase config not available!');
-  articleListDiv.innerHTML = '<p style="color: red;">Error: Firebase configuration not available</p>';
+  if (unratedListDiv) unratedListDiv.innerHTML = '<p style="color: red;">Error: Firebase configuration not available</p>';
+  if (relevantListDiv) relevantListDiv.innerHTML = '<p style="color: red;">Error: Firebase configuration not available</p>';
 } else {
   initializeFirebaseAndLoadArticles();
 }
@@ -72,53 +77,101 @@ async function initializeFirebaseAndLoadArticles() {
     console.log('Firebase initialized successfully');
     
     // Update UI to show loading
-    if (articleListDiv) {
-      articleListDiv.innerHTML = '<p style="color: #888;">Loading articles from database...</p>';
+    if (unratedListDiv) {
+      unratedListDiv.innerHTML = '<p style="color: #888;">Loading unrated articles...</p>';
+    }
+    if (relevantListDiv) {
+      relevantListDiv.innerHTML = '<p style="color: #888;">Loading relevant articles...</p>';
     }
     
-    // Set up real-time listener for articles
+    // Set up real-time listener for all articles, filter unrated ones on client side
     const articlesRef = db.collection('articles');
-    const query = articlesRef.orderBy('ai_score', 'desc');
     
     console.log('Setting up real-time listener...');
     
-    query.onSnapshot((snapshot: any) => {
+    articlesRef.onSnapshot((snapshot: any) => {
       console.log(`Received ${snapshot.docs.length} articles from Firestore`);
       
-      if (!articleListDiv) return;
+      if (!unratedListDiv || !relevantListDiv) return;
       
       // Clear existing content
-      articleListDiv.innerHTML = '';
+      unratedListDiv.innerHTML = '';
+      relevantListDiv.innerHTML = '';
       
-      if (snapshot.empty) {
-        articleListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">No articles found. Run the workflow to fetch some!</p>';
-        return;
-      }
+      // Convert snapshot to arrays and separate by rating
+      const unratedArticles: ArticleData[] = [];
+      const relevantArticles: ArticleData[] = [];
       
-      // Process each article
       snapshot.forEach((doc: any) => {
-        const article = doc.data() as ArticleData;
-        const articleElement = createArticleElement(article);
-        articleListDiv.appendChild(articleElement);
+        const articleData = doc.data() as ArticleData;
+        
+        if (!articleData.user_rating) {
+          // Unrated articles (null or undefined rating)
+          unratedArticles.push(articleData);
+        } else if (articleData.user_rating === 'positive') {
+          // Positively rated articles
+          relevantArticles.push(articleData);
+        }
+        // Skip negative and neutral rated articles
       });
       
-      console.log(`Displayed ${snapshot.docs.length} articles`);
+      // Sort both arrays by published date (newest first)
+      const sortByDate = (a: ArticleData, b: ArticleData) => {
+        const dateA = a.published_at?.toDate ? a.published_at.toDate() : new Date(a.published_at);
+        const dateB = b.published_at?.toDate ? b.published_at.toDate() : new Date(b.published_at);
+        return dateB.getTime() - dateA.getTime();
+      };
+      
+      unratedArticles.sort(sortByDate);
+      relevantArticles.sort(sortByDate);
+      
+      // Display unrated articles
+      if (unratedArticles.length === 0) {
+        if (snapshot.empty) {
+          unratedListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">No articles found. Run the workflow to fetch some!</p>';
+        } else {
+          unratedListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">All articles have been rated! 🎉</p>';
+        }
+      } else {
+        unratedArticles.forEach(article => {
+          const articleElement = createArticleElement(article, 'unrated');
+          unratedListDiv.appendChild(articleElement);
+        });
+      }
+      
+      // Display relevant articles
+      if (relevantArticles.length === 0) {
+        relevantListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">No relevant articles yet.<br>Rate articles as "Relevant" to build your curated feed!</p>';
+      } else {
+        relevantArticles.forEach(article => {
+          const articleElement = createArticleElement(article, 'relevant');
+          relevantListDiv.appendChild(articleElement);
+        });
+      }
+      
+      console.log(`Displayed ${unratedArticles.length} unrated and ${relevantArticles.length} relevant articles`);
     }, (error: any) => {
       console.error('Error listening to articles:', error);
-      if (articleListDiv) {
-        articleListDiv.innerHTML = '<p style="color: red;">Error loading articles. Check console for details.</p>';
+      if (unratedListDiv) {
+        unratedListDiv.innerHTML = '<p style="color: red;">Error loading articles. Check console for details.</p>';
+      }
+      if (relevantListDiv) {
+        relevantListDiv.innerHTML = '<p style="color: red;">Error loading articles. Check console for details.</p>';
       }
     });
     
   } catch (error) {
     console.error('Error initializing Firebase:', error);
-    if (articleListDiv) {
-      articleListDiv.innerHTML = `<p style="color: red;">Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
+    if (unratedListDiv) {
+      unratedListDiv.innerHTML = `<p style="color: red;">Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
+    }
+    if (relevantListDiv) {
+      relevantListDiv.innerHTML = `<p style="color: red;">Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
     }
   }
 }
 
-function createArticleElement(article: ArticleData): HTMLElement {
+function createArticleElement(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement {
   const articleElement = document.createElement('div');
   articleElement.classList.add('article');
   
@@ -143,15 +196,45 @@ function createArticleElement(article: ArticleData): HTMLElement {
   // Determine content type status for metadata
   const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
 
+  // Conditionally show rating controls only for unrated articles
+  const ratingControlsHtml = columnType === 'unrated' ? `
+    <div class="rating-controls">
+      <span class="rating-label">Rate this article:</span>
+      <button class="rating-btn positive" data-rating="positive" data-article-url="${escapeHtml(article.url)}">
+        👍 Relevant
+      </button>
+      <button class="rating-btn neutral" data-rating="neutral" data-article-url="${escapeHtml(article.url)}">
+        😐 Neutral
+      </button>
+      <button class="rating-btn negative" data-rating="negative" data-article-url="${escapeHtml(article.url)}">
+        👎 Not Relevant
+      </button>
+    </div>
+  ` : '';
+
+  // Read status indicator and button
+  const readStatusHtml = article.is_read ? 
+    '<span class="read-status">✅ Read</span>' : 
+    `<button class="read-btn" data-article-url="${escapeHtml(article.url)}">📖 Mark as Read</button>`;
+
+  // Add read class for styling
+  if (article.is_read) {
+    articleElement.classList.add('read');
+  }
+
   articleElement.innerHTML = `
     <div class="article-header">
       <h2 class="article-title">${escapeHtml(article.title)}</h2>
     </div>
     <p class="article-summary">${escapeHtml(article.ai_summary)}</p>
     <div class="article-actions">
-      <a href="${escapeHtml(article.url)}" target="_blank" class="read-full-link">
-        Read Full Article ↗
-      </a>
+      <div class="action-row">
+        <a href="${escapeHtml(article.url)}" target="_blank" class="read-full-link">
+          Read Full Article ↗
+        </a>
+        ${readStatusHtml}
+      </div>
+      ${ratingControlsHtml}
     </div>
     <div class="article-meta">
       <span>Source: ${escapeHtml(article.source_name)}</span> |
@@ -161,7 +244,36 @@ function createArticleElement(article: ArticleData): HTMLElement {
     </div>
   `;
   
-  // No expand/collapse functionality needed anymore
+  // Add event listeners for rating buttons (only for unrated articles)
+  if (columnType === 'unrated') {
+    const ratingButtons = articleElement.querySelectorAll('.rating-btn');
+    ratingButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const target = e.target as HTMLElement;
+        const rating = target.getAttribute('data-rating') as 'positive' | 'negative' | 'neutral';
+        const articleUrl = target.getAttribute('data-article-url');
+        
+        if (rating && articleUrl) {
+          await rateArticle(articleUrl, rating, articleElement);
+        }
+      });
+    });
+  }
+
+  // Add event listener for read button (available for all articles)
+  const readButton = articleElement.querySelector('.read-btn');
+  if (readButton) {
+    readButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      const articleUrl = target.getAttribute('data-article-url');
+      
+      if (articleUrl) {
+        await markArticleAsRead(articleUrl, articleElement);
+      }
+    });
+  }
   
   return articleElement;
 }
@@ -173,3 +285,119 @@ function escapeHtml(text: string): string {
 }
 
 // formatContent function removed since we no longer display scraped content in the UI
+
+async function markArticleAsRead(articleUrl: string, articleElement: HTMLElement) {
+  try {
+    console.log(`Marking article as read: ${articleUrl}`);
+    
+    // Show loading state
+    const readButton = articleElement.querySelector('.read-btn') as HTMLButtonElement;
+    if (readButton) {
+      readButton.innerHTML = '<span style="color: #888;">Saving...</span>';
+      readButton.disabled = true;
+    }
+    
+    // Create article ID from URL (same method used in main workflow)
+    const crypto = (window as any).crypto;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(articleUrl);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Get Firebase instances
+    const firebase = (window as any).firebase;
+    const db = firebase.firestore();
+    
+    // Update the article as read
+    await db.collection('articles').doc(articleId).update({
+      is_read: true
+    });
+    
+    console.log(`✅ Successfully marked article as read`);
+    
+    // Update the UI immediately
+    articleElement.classList.add('read');
+    
+    // Replace button with read status
+    const actionRow = articleElement.querySelector('.action-row');
+    if (actionRow) {
+      const readStatus = actionRow.querySelector('.read-btn, .read-status');
+      if (readStatus) {
+        readStatus.outerHTML = '<span class="read-status">✅ Read</span>';
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error marking article as read:', error);
+    
+    // Show error and restore button
+    const readButton = articleElement.querySelector('.read-btn') as HTMLButtonElement;
+    if (readButton) {
+      readButton.innerHTML = '📖 Mark as Read';
+      readButton.disabled = false;
+    }
+  }
+}
+
+async function rateArticle(articleUrl: string, rating: 'positive' | 'negative' | 'neutral', articleElement: HTMLElement) {
+  try {
+    console.log(`Rating article as ${rating}: ${articleUrl}`);
+    
+    // Show loading state
+    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
+    if (ratingControls) {
+      ratingControls.innerHTML = '<span style="color: #888;">Saving rating...</span>';
+    }
+    
+    // Create article ID from URL (same method used in main workflow)
+    const crypto = (window as any).crypto;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(articleUrl);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Get Firebase instances
+    const firebase = (window as any).firebase;
+    const db = firebase.firestore();
+    
+    // Update the article with rating
+    await db.collection('articles').doc(articleId).update({
+      user_rating: rating,
+      rated_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✅ Successfully rated article as ${rating}`);
+    
+    // Show success message briefly, then remove the article
+    if (ratingControls) {
+      ratingControls.innerHTML = `<span style="color: #00aaff;">✓ Rated as ${rating}</span>`;
+    }
+    
+    // Remove article from UI after brief delay
+    setTimeout(() => {
+      articleElement.style.transition = 'all 0.3s ease';
+      articleElement.style.opacity = '0';
+      articleElement.style.transform = 'translateX(-100%)';
+      
+      setTimeout(() => {
+        articleElement.remove();
+      }, 300);
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Error rating article:', error);
+    
+    // Show error message
+    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
+    if (ratingControls) {
+      ratingControls.innerHTML = '<span style="color: #ff6b6b;">Error saving rating. Please try again.</span>';
+      
+      // Restore buttons after error
+      setTimeout(() => {
+        location.reload(); // Simple recovery - reload the page
+      }, 2000);
+    }
+  }
+}

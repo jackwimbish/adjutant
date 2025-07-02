@@ -29,6 +29,9 @@ export interface ArticleData {
   is_read: boolean;
   is_hidden: boolean;
   is_favorite: boolean;
+  // User rating system
+  user_rating: 'positive' | 'negative' | 'neutral' | null;
+  rated_at?: Date;
   // Content scraping metadata
   content_source: 'rss' | 'scraped' | 'failed';
   scraping_status: 'pending' | 'success' | 'failed';
