@@ -20,7 +20,8 @@
     "jsdom": "^26.1.0",
     "openai": "^4.52.0",
     "puppeteer-core": "^24.11.2",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "zod": "^3.25.69"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

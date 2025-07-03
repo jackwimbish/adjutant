@@ -1,55 +1,89 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { z } from 'zod';
 
-export interface UserConfig {
-  firebase: {
-    apiKey: string;
-    authDomain: string;
-    projectId: string;
-    storageBucket: string;
-    messagingSenderId: string;
-    appId: string;
-  };
-  openai: {
-    apiKey: string;
-  };
-  firstRun: boolean;
-}
+// Zod schema for user configuration validation
+const UserConfigSchema = z.object({
+  firebase: z.object({
+    apiKey: z.string().min(1),
+    authDomain: z.string().min(1),
+    projectId: z.string().min(1),
+    storageBucket: z.string().min(1),
+    messagingSenderId: z.string().min(1),
+    appId: z.string().min(1)
+  }),
+  openai: z.object({
+    apiKey: z.string().min(1)
+  }),
+  appSettings: z.object({
+    topicDescription: z.string().min(1)
+  }),
+  firstRun: z.boolean()
+});
+
+// Infer TypeScript type from Zod schema
+export type UserConfig = z.infer<typeof UserConfigSchema>;
 
 const CONFIG_FILE_NAME = 'config.json';
 
 /**
  * Get the full path to the user config file
- * Works in both Electron main process and Node.js child processes
+ * Uses cross-platform path logic that works in both Electron and Node.js
  */
 export function getConfigPath(): string {
-  let userDataPath: string;
+  const appName = getAppName();
+  const userDataPath = getUserDataPath(appName);
+  return path.join(userDataPath, CONFIG_FILE_NAME);
+}
 
+/**
+ * Get the appropriate app name based on the environment
+ */
+function getAppName(): string {
   try {
-    // Try to use Electron's app.getPath() if available (main process)
+    // Try to use Electron's app.getName() if available (production builds use 'Adjutant')
     const { app } = require('electron');
-    if (app && app.getPath) {
-      userDataPath = app.getPath('userData');
-    } else {
-      throw new Error('Electron app not available');
+    if (app && app.getName) {
+      return app.getName();
     }
   } catch (error) {
-    // Fallback for Node.js processes: construct the path manually
-    const appName = 'adjutant'; // Must match package.json name in development
-    const platform = process.platform;
-    
-    if (platform === 'darwin') {
-      userDataPath = path.join(os.homedir(), 'Library', 'Application Support', appName);
-    } else if (platform === 'win32') {
-      userDataPath = path.join(os.homedir(), 'AppData', 'Roaming', appName);
-    } else {
-      // Linux and others
-      userDataPath = path.join(os.homedir(), '.config', appName);
-    }
+    // Fallback for Node.js processes or development
   }
+  
+  // Default to package.json name for development
+  return 'adjutant';
+}
 
-  return path.join(userDataPath, CONFIG_FILE_NAME);
+/**
+ * Get the user data directory path for the given app name
+ * Handles different operating systems and contexts properly
+ */
+function getUserDataPath(appName: string): string {
+  try {
+    // Try to use Electron's app.getPath() if available (most reliable)
+    const { app } = require('electron');
+    if (app && app.getPath) {
+      return app.getPath('userData');
+    }
+  } catch (error) {
+    // Fallback for Node.js processes: construct path manually
+  }
+  
+  // Manual path construction for Node.js contexts
+  const platform = process.platform;
+  const homeDir = os.homedir();
+  
+  switch (platform) {
+    case 'darwin':
+      return path.join(homeDir, 'Library', 'Application Support', appName);
+    case 'win32':
+      return path.join(homeDir, 'AppData', 'Roaming', appName);
+    case 'linux':
+    default:
+      // Linux and other Unix-like systems
+      return path.join(homeDir, '.config', appName);
+  }
 }
 
 /**
@@ -75,18 +109,46 @@ export function loadUserConfig(): UserConfig | null {
     const configData = fs.readFileSync(configPath, 'utf8');
     const config = JSON.parse(configData) as UserConfig;
     
+    // Migrate old config format if needed
+    const migratedConfig = migrateConfig(config);
+    
     // Validate the config structure
-    if (!isConfigValid(config)) {
-      console.error('Invalid config structure found');
+    if (!isConfigValid(migratedConfig)) {
+      const errors = getConfigValidationErrors(migratedConfig);
+      console.error('Invalid config structure found:', errors);
       return null;
     }
 
+    // Save migrated config if it was updated
+    if (migratedConfig !== config) {
+      saveUserConfig(migratedConfig);
+    }
+
     console.log('User config loaded successfully from:', configPath);
-    return config;
+    return migratedConfig;
   } catch (error) {
     console.error('Error loading user config:', error);
     return null;
   }
+}
+
+/**
+ * Migrate old config format to new format
+ */
+function migrateConfig(config: any): UserConfig {
+  // If appSettings doesn't exist, add it with default values
+  if (!config.appSettings) {
+    config.appSettings = {
+      topicDescription: 'developer-focused AI stories'
+    };
+  }
+  
+  // If topicDescription doesn't exist in appSettings, add it
+  if (!config.appSettings.topicDescription) {
+    config.appSettings.topicDescription = 'developer-focused AI stories';
+  }
+  
+  return config as UserConfig;
 }
 
 /**
@@ -113,43 +175,25 @@ export function saveUserConfig(config: UserConfig): boolean {
 }
 
 /**
- * Validate that config has all required fields
+ * Validate that config has all required fields using Zod schema
  */
 export function isConfigValid(config: any): config is UserConfig {
-  if (!config || typeof config !== 'object') {
-    return false;
+  const result = UserConfigSchema.safeParse(config);
+  return result.success;
+}
+
+/**
+ * Get detailed validation errors for debugging
+ */
+export function getConfigValidationErrors(config: any): string[] {
+  const result = UserConfigSchema.safeParse(config);
+  if (result.success) {
+    return [];
   }
-
-  // Check Firebase config
-  if (!config.firebase || typeof config.firebase !== 'object') {
-    return false;
-  }
-
-  const requiredFirebaseFields = [
-    'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
-  ];
-
-  for (const field of requiredFirebaseFields) {
-    if (!config.firebase[field] || typeof config.firebase[field] !== 'string') {
-      return false;
-    }
-  }
-
-  // Check OpenAI config
-  if (!config.openai || typeof config.openai !== 'object') {
-    return false;
-  }
-
-  if (!config.openai.apiKey || typeof config.openai.apiKey !== 'string') {
-    return false;
-  }
-
-  // Check firstRun flag
-  if (typeof config.firstRun !== 'boolean') {
-    return false;
-  }
-
-  return true;
+  
+  return result.error.errors.map(err => 
+    `${err.path.join('.')}: ${err.message}`
+  );
 }
 
 /**
@@ -167,6 +211,9 @@ export function createDefaultConfig(): UserConfig {
     },
     openai: {
       apiKey: ''
+    },
+    appSettings: {
+      topicDescription: 'developer-focused AI stories'
     },
     firstRun: true
   };

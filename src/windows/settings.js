@@ -260,4 +260,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('beforeunload', () => {
         window.settingsAPI.removeAllListeners();
     });
-}); 
+});
+
+/**
+ * Switch to topic settings page
+ */
+function switchToTopicSettings() {
+    window.settingsAPI.openTopicSettings();
+} 

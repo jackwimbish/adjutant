@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('settingsAPI', {
     ipcRenderer.send('settings:close-window');
   },
 
+  // Open topic settings window
+  openTopicSettings: (): void => {
+    ipcRenderer.send('settings:open-topic-settings');
+  },
+
   // Listen for events from main process
   onConfigSaved: (callback: () => void): void => {
     ipcRenderer.on('settings:config-saved', callback);
@@ -48,6 +53,7 @@ declare global {
       testFirebase: (firebaseConfig: UserConfig['firebase']) => Promise<{ success: boolean; message: string }>;
       testOpenAI: (openaiConfig: UserConfig['openai']) => Promise<{ success: boolean; message: string }>;
       closeWindow: () => void;
+      openTopicSettings: () => void;
       onConfigSaved: (callback: () => void) => void;
       removeAllListeners: () => void;
     };

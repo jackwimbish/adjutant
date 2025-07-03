@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Expose method to open settings window
   openSettings: () => ipcRenderer.send('open-settings'),
+  
+  // Expose method to open topic settings window
+  openTopicSettings: () => ipcRenderer.send('settings:open-topic-settings'),
 });
 
 // Expose a promise-based Firebase config getter

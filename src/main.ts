@@ -14,6 +14,7 @@ import {
 // Global references to windows
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+let topicSettingsWindow: BrowserWindow | null = null;
 let userConfig: UserConfig | null = null;
 
 // Setup IPC handlers for settings
@@ -95,6 +96,71 @@ ipcMain.on('settings:close-window', () => {
   }
 });
 
+// IPC handler for opening topic settings
+ipcMain.on('settings:open-topic-settings', () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }
+  if (!topicSettingsWindow || topicSettingsWindow.isDestroyed()) {
+    createTopicSettingsWindow();
+  } else {
+    topicSettingsWindow.focus();
+  }
+});
+
+// IPC handler for saving topic settings
+ipcMain.handle('save-topic-settings', async (event, settings: { topicDescription: string }) => {
+  try {
+    const currentConfig = loadUserConfig();
+    if (!currentConfig) {
+      console.error('No user config found for topic settings update');
+      return false;
+    }
+
+    // Update the app settings
+    currentConfig.appSettings.topicDescription = settings.topicDescription;
+    
+    const success = saveUserConfig(currentConfig);
+    if (success) {
+      userConfig = currentConfig;
+      console.log('Topic settings saved successfully');
+    }
+    return success;
+  } catch (error) {
+    console.error('Error saving topic settings:', error);
+    return false;
+  }
+});
+
+// IPC handler for loading config (for topic settings)
+ipcMain.handle('load-config', async () => {
+  try {
+    return loadUserConfig();
+  } catch (error) {
+    console.error('Error loading config for topic settings:', error);
+    return null;
+  }
+});
+
+// IPC handler for closing topic settings window
+ipcMain.on('close-settings', () => {
+  if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
+    topicSettingsWindow.close();
+  }
+});
+
+// IPC handler for opening API settings from topic settings
+ipcMain.on('open-api-settings', () => {
+  if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
+    topicSettingsWindow.close();
+  }
+  if (!settingsWindow || settingsWindow.isDestroyed()) {
+    createSettingsWindow();
+  } else {
+    settingsWindow.focus();
+  }
+});
+
 // Handle opening settings from main interface
 ipcMain.on('open-settings', () => {
   if (!settingsWindow || settingsWindow.isDestroyed()) {
@@ -144,6 +210,38 @@ function createSettingsWindow(): void {
   // Open DevTools for debugging in development
   if (APP_CONFIG.DEV_TOOLS_OPEN) {
     settingsWindow.webContents.openDevTools();
+  }
+}
+
+// Function to create topic settings window
+function createTopicSettingsWindow(): void {
+  topicSettingsWindow = new BrowserWindow({
+    width: 600,
+    height: 700,
+    resizable: false,
+    modal: true,
+    parent: mainWindow || undefined,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'windows', 'topic-settings-preload.js'),
+    },
+    title: 'Topic Settings - Adjutant',
+  });
+
+  topicSettingsWindow.loadFile(path.join(__dirname, 'windows', 'topic-settings.html'));
+  
+  // Remove menu bar from settings window
+  topicSettingsWindow.setMenuBarVisibility(false);
+
+  // Handle topic settings window closed
+  topicSettingsWindow.on('closed', () => {
+    topicSettingsWindow = null;
+  });
+
+  // Open DevTools for debugging in development
+  if (APP_CONFIG.DEV_TOOLS_OPEN) {
+    topicSettingsWindow.webContents.openDevTools();
   }
 }
 
