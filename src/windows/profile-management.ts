@@ -1,73 +1,103 @@
-// Profile Management Window JavaScript
+// Profile Management Window TypeScript
+// Browser-compatible version without module exports
 
-console.log('Profile Management JS loaded');
+console.log('Profile Management TS loaded');
+
+// Type definitions
+interface FirebaseTimestamp {
+  toDate(): Date;
+  seconds: number;
+  nanoseconds?: number;
+}
+
+interface UserProfile {
+  likes: string[];
+  dislikes: string[];
+  changelog: string;
+  last_updated: FirebaseTimestamp | Date | string;
+  created_at: FirebaseTimestamp | Date | string;
+  id?: string;
+  articlesAnalyzed?: number;
+  version?: number;
+}
+
+interface ProfileApiResponse {
+  success: boolean;
+  profile?: UserProfile;
+  message?: string;
+}
+
+interface StagedChanges {
+  likes: string[];
+  dislikes: string[];
+}
 
 // DOM elements
-const loadingDiv = document.getElementById('loading');
-const errorDiv = document.getElementById('error');
-const errorMessage = document.getElementById('error-message');
-const noProfileDiv = document.getElementById('no-profile');
-const profileContentDiv = document.getElementById('profile-content');
+const loadingDiv = document.getElementById('loading') as HTMLDivElement;
+const errorDiv = document.getElementById('error') as HTMLDivElement;
+const errorMessage = document.getElementById('error-message') as HTMLElement;
+const noProfileDiv = document.getElementById('no-profile') as HTMLDivElement;
+const profileContentDiv = document.getElementById('profile-content') as HTMLDivElement;
 
 // Statistics elements
-const likesCount = document.getElementById('likes-count');
-const dislikesCount = document.getElementById('dislikes-count');
-const articlesAnalyzed = document.getElementById('articles-analyzed');
-const profileVersion = document.getElementById('profile-version');
+const likesCount = document.getElementById('likes-count') as HTMLElement;
+const dislikesCount = document.getElementById('dislikes-count') as HTMLElement;
+const articlesAnalyzed = document.getElementById('articles-analyzed') as HTMLElement;
+const profileVersion = document.getElementById('profile-version') as HTMLElement;
 
 // Preferences elements
-const likesList = document.getElementById('likes-list');
-const dislikesList = document.getElementById('dislikes-list');
-const likesEmpty = document.getElementById('likes-empty');
-const dislikesEmpty = document.getElementById('dislikes-empty');
+const likesList = document.getElementById('likes-list') as HTMLUListElement;
+const dislikesList = document.getElementById('dislikes-list') as HTMLUListElement;
+const likesEmpty = document.getElementById('likes-empty') as HTMLElement;
+const dislikesEmpty = document.getElementById('dislikes-empty') as HTMLElement;
 
 // Metadata elements
-const createdDate = document.getElementById('created-date');
-const updatedDate = document.getElementById('updated-date');
-const profileId = document.getElementById('profile-id');
-const profileStatus = document.getElementById('profile-status');
-const changelogSection = document.getElementById('changelog-section');
-const changelog = document.getElementById('changelog');
+const createdDate = document.getElementById('created-date') as HTMLElement;
+const updatedDate = document.getElementById('updated-date') as HTMLElement;
+const profileId = document.getElementById('profile-id') as HTMLElement;
+const profileStatus = document.getElementById('profile-status') as HTMLElement;
+const changelogSection = document.getElementById('changelog-section') as HTMLElement;
+const changelog = document.getElementById('changelog') as HTMLElement;
 
 // Action buttons
-const refreshBtn = document.getElementById('refresh-btn');
-const regenerateBtn = document.getElementById('regenerate-btn');
-const exportBtn = document.getElementById('export-btn');
-const deleteBtn = document.getElementById('delete-btn');
-const closeBtn = document.getElementById('close-btn');
+const refreshBtn = document.getElementById('refresh-btn') as HTMLButtonElement;
+const regenerateBtn = document.getElementById('regenerate-btn') as HTMLButtonElement;
+const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement;
+const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
 
 // Edit mode elements
-const editModeBtn = document.getElementById('edit-mode-btn');
-const editModeActions = document.getElementById('edit-mode-actions');
-const normalModeActions = document.getElementById('normal-mode-actions');
-const saveChangesBtn = document.getElementById('save-changes-btn');
-const cancelEditBtn = document.getElementById('cancel-edit-btn');
+const editModeBtn = document.getElementById('edit-mode-btn') as HTMLButtonElement;
+const editModeActions = document.getElementById('edit-mode-actions') as HTMLElement;
+const normalModeActions = document.getElementById('normal-mode-actions') as HTMLElement;
+const saveChangesBtn = document.getElementById('save-changes-btn') as HTMLButtonElement;
+const cancelEditBtn = document.getElementById('cancel-edit-btn') as HTMLButtonElement;
 
 // Count displays
-const likesCountDisplay = document.getElementById('likes-count-display');
-const dislikesCountDisplay = document.getElementById('dislikes-count-display');
+const likesCountDisplay = document.getElementById('likes-count-display') as HTMLElement;
+const dislikesCountDisplay = document.getElementById('dislikes-count-display') as HTMLElement;
 
 // Edit controls
-const likesEditControls = document.getElementById('likes-edit-controls');
-const dislikesEditControls = document.getElementById('dislikes-edit-controls');
-const addLikeInput = document.getElementById('add-like-input');
-const addLikeBtn = document.getElementById('add-like-btn');
-const addDislikeInput = document.getElementById('add-dislike-input');
-const addDislikeBtn = document.getElementById('add-dislike-btn');
+const likesEditControls = document.getElementById('likes-edit-controls') as HTMLElement;
+const dislikesEditControls = document.getElementById('dislikes-edit-controls') as HTMLElement;
+const addLikeInput = document.getElementById('add-like-input') as HTMLInputElement;
+const addLikeBtn = document.getElementById('add-like-btn') as HTMLButtonElement;
+const addDislikeInput = document.getElementById('add-dislike-input') as HTMLInputElement;
+const addDislikeBtn = document.getElementById('add-dislike-btn') as HTMLButtonElement;
 
 // Current profile data and edit state
-let currentProfile = null;
-let isEditMode = false;
-let stagedChanges = {
+let currentProfile: UserProfile | null = null;
+let isEditMode: boolean = false;
+let stagedChanges: StagedChanges = {
     likes: [],
     dislikes: []
 };
-let hasUnsavedChanges = false;
+let hasUnsavedChanges: boolean = false;
 
 /**
  * Initialize the profile management window
  */
-async function initializeProfileManagement() {
+async function initializeProfileManagement(): Promise<void> {
     console.log('Initializing profile management...');
     
     // Set up event listeners
@@ -80,7 +110,7 @@ async function initializeProfileManagement() {
 /**
  * Set up event listeners for all interactive elements
  */
-function setupEventListeners() {
+function setupEventListeners(): void {
     // Normal mode buttons
     refreshBtn.addEventListener('click', handleRefresh);
     regenerateBtn.addEventListener('click', handleRegenerate);
@@ -98,10 +128,10 @@ function setupEventListeners() {
     addDislikeBtn.addEventListener('click', () => addPreference('dislike'));
     
     // Input enter key handling
-    addLikeInput.addEventListener('keypress', (e) => {
+    addLikeInput.addEventListener('keypress', (e: KeyboardEvent) => {
         if (e.key === 'Enter') addPreference('like');
     });
-    addDislikeInput.addEventListener('keypress', (e) => {
+    addDislikeInput.addEventListener('keypress', (e: KeyboardEvent) => {
         if (e.key === 'Enter') addPreference('dislike');
     });
     
@@ -113,18 +143,18 @@ function setupEventListeners() {
 /**
  * Load profile data from the main process
  */
-async function loadProfileData() {
+async function loadProfileData(): Promise<void> {
     try {
         showLoading();
         
         console.log('Loading profile data...');
         
         // Check if electronAPI is available
-        if (!window.electronAPI || !window.electronAPI.getProfile) {
+        if (!(window as any).electronAPI || !(window as any).electronAPI.getProfile) {
             throw new Error('electronAPI.getProfile not available');
         }
         
-        const result = await window.electronAPI.getProfile();
+        const result = await (window as any).electronAPI.getProfile();
         console.log('Profile API result:', result);
         
         if (result.success && result.profile) {
@@ -137,14 +167,15 @@ async function loadProfileData() {
         }
     } catch (error) {
         console.error('Error loading profile:', error);
-        showError(`Failed to load profile data: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        showError(`Failed to load profile data: ${errorMessage}`);
     }
 }
 
 /**
  * Display profile data in the UI
  */
-function displayProfile(profile) {
+function displayProfile(profile: UserProfile): void {
     console.log('Displaying profile:', profile);
     
     // Hide loading and error states
@@ -179,20 +210,20 @@ function displayProfile(profile) {
 /**
  * Update statistics display
  */
-function updateStatistics(profile) {
+function updateStatistics(profile: UserProfile): void {
     const likes = profile.likes || [];
     const dislikes = profile.dislikes || [];
     
-    likesCount.textContent = likes.length;
-    dislikesCount.textContent = dislikes.length;
-    articlesAnalyzed.textContent = profile.articlesAnalyzed || 0;
-    profileVersion.textContent = profile.version || 1;
+    likesCount.textContent = likes.length.toString();
+    dislikesCount.textContent = dislikes.length.toString();
+    articlesAnalyzed.textContent = (profile.articlesAnalyzed || 0).toString();
+    profileVersion.textContent = (profile.version || 1).toString();
 }
 
 /**
  * Update preferences display
  */
-function updatePreferences(profile) {
+function updatePreferences(profile?: UserProfile): void {
     // Use staged changes if in edit mode, otherwise use profile data
     const likes = isEditMode ? stagedChanges.likes : (profile?.likes || []);
     const dislikes = isEditMode ? stagedChanges.dislikes : (profile?.dislikes || []);
@@ -232,7 +263,7 @@ function updatePreferences(profile) {
 /**
  * Create a preference item element
  */
-function createPreferenceItem(preference, type, index) {
+function createPreferenceItem(preference: string, type: 'like' | 'dislike', index: number): HTMLLIElement {
     const listItem = document.createElement('li');
     listItem.className = `preference-item ${isEditMode ? 'edit-mode' : ''}`;
     
@@ -263,7 +294,7 @@ function createPreferenceItem(preference, type, index) {
 /**
  * Update metadata display
  */
-function updateMetadata(profile) {
+function updateMetadata(profile: UserProfile): void {
     // Format dates
     const created = profile.created_at ? formatDate(profile.created_at) : 'Unknown';
     const updated = profile.last_updated ? formatDate(profile.last_updated) : 'Unknown';
@@ -277,14 +308,14 @@ function updateMetadata(profile) {
 /**
  * Update changelog display
  */
-function updateChangelog(profile) {
+function updateChangelog(profile: UserProfile): void {
     if (profile.changelog && profile.changelog.trim()) {
         changelogSection.style.display = 'block';
         
         const changelogContent = document.createElement('div');
         changelogContent.innerHTML = `
             <h4>Latest Changes</h4>
-            <p>${profile.changelog}</p>
+            <p>${escapeHtml(profile.changelog)}</p>
         `;
         
         changelog.innerHTML = '';
@@ -295,18 +326,28 @@ function updateChangelog(profile) {
 }
 
 /**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
  * Format date for display
  */
-function formatDate(dateInput) {
+function formatDate(dateInput: FirebaseTimestamp | Date | string): string {
     try {
-        let date;
+        let date: Date;
         
-        if (dateInput && typeof dateInput.toDate === 'function') {
+        if (dateInput && typeof (dateInput as FirebaseTimestamp).toDate === 'function') {
             // Firestore Timestamp object with toDate method
-            date = dateInput.toDate();
-        } else if (dateInput && typeof dateInput === 'object' && dateInput.seconds) {
+            date = (dateInput as FirebaseTimestamp).toDate();
+        } else if (dateInput && typeof dateInput === 'object' && 'seconds' in dateInput) {
             // Firebase Timestamp object with seconds and nanoseconds
-            date = new Date(dateInput.seconds * 1000 + (dateInput.nanoseconds || 0) / 1000000);
+            const timestamp = dateInput as FirebaseTimestamp;
+            date = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000);
         } else if (dateInput instanceof Date) {
             date = dateInput;
         } else if (typeof dateInput === 'string' || typeof dateInput === 'number') {
@@ -332,10 +373,10 @@ function formatDate(dateInput) {
 /**
  * Handle refresh button click
  */
-async function handleRefresh() {
+async function handleRefresh(): Promise<void> {
     console.log('Refreshing profile...');
     
-    const originalText = refreshBtn.textContent;
+    const originalText = refreshBtn.textContent || 'Refresh';
     refreshBtn.textContent = '🔄 Refreshing...';
     refreshBtn.disabled = true;
     
@@ -361,7 +402,7 @@ async function handleRefresh() {
 /**
  * Handle regenerate button click
  */
-async function handleRegenerate() {
+async function handleRegenerate(): Promise<void> {
     console.log('Regenerating profile...');
     
     const confirmed = confirm(
@@ -374,12 +415,12 @@ async function handleRegenerate() {
         return;
     }
     
-    const originalText = regenerateBtn.textContent;
+    const originalText = regenerateBtn.textContent || 'Regenerate';
     regenerateBtn.textContent = '🧠 Regenerating...';
     regenerateBtn.disabled = true;
     
     try {
-        const result = await window.electronAPI.generateProfile();
+        const result = await (window as any).electronAPI.generateProfile();
         
         if (result.success) {
             regenerateBtn.textContent = '✅ Regenerated';
@@ -396,7 +437,8 @@ async function handleRegenerate() {
     } catch (error) {
         console.error('Error regenerating profile:', error);
         regenerateBtn.textContent = '❌ Error';
-        alert(`Failed to regenerate profile: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Failed to regenerate profile: ${errorMessage}`);
         
         setTimeout(() => {
             regenerateBtn.textContent = originalText;
@@ -408,17 +450,13 @@ async function handleRegenerate() {
 /**
  * Handle export button click
  */
-async function handleExport() {
+async function handleExport(): Promise<void> {
     console.log('Exporting profile...');
     
     if (!currentProfile) {
-        alert('No profile data to export');
+        alert('No profile to export');
         return;
     }
-    
-    const originalText = exportBtn.textContent;
-    exportBtn.textContent = '📤 Exporting...';
-    exportBtn.disabled = true;
     
     try {
         // Create export data
@@ -428,12 +466,13 @@ async function handleExport() {
             version: '1.0'
         };
         
-        // Create and download file
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
-            type: 'application/json' 
-        });
+        // Convert to JSON
+        const jsonData = JSON.stringify(exportData, null, 2);
         
+        // Create download
+        const blob = new Blob([jsonData], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
+        
         const a = document.createElement('a');
         a.href = url;
         a.download = `adjutant-profile-${new Date().toISOString().split('T')[0]}.json`;
@@ -442,33 +481,29 @@ async function handleExport() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
+        // Show success
+        const originalText = exportBtn.textContent || 'Export';
         exportBtn.textContent = '✅ Exported';
         setTimeout(() => {
             exportBtn.textContent = originalText;
-            exportBtn.disabled = false;
-        }, 1500);
+        }, 2000);
+        
     } catch (error) {
         console.error('Error exporting profile:', error);
-        exportBtn.textContent = '❌ Error';
-        alert(`Failed to export profile: ${error.message}`);
-        
-        setTimeout(() => {
-            exportBtn.textContent = originalText;
-            exportBtn.disabled = false;
-        }, 2000);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Failed to export profile: ${errorMessage}`);
     }
 }
 
 /**
  * Handle delete button click
  */
-async function handleDelete() {
+async function handleDelete(): Promise<void> {
     console.log('Deleting profile...');
     
     const confirmed = confirm(
         'Are you sure you want to delete your profile?\n\n' +
         'This will permanently remove all your preferences and learning data. ' +
-        'You will need to rate articles again to generate a new profile. ' +
         'This action cannot be undone.'
     );
     
@@ -476,17 +511,17 @@ async function handleDelete() {
         return;
     }
     
-    const originalText = deleteBtn.textContent;
+    const originalText = deleteBtn.textContent || 'Delete';
     deleteBtn.textContent = '🗑️ Deleting...';
     deleteBtn.disabled = true;
     
     try {
-        const result = await window.electronAPI.deleteProfile();
+        const result = await (window as any).electronAPI.deleteProfile();
         
         if (result.success) {
             deleteBtn.textContent = '✅ Deleted';
             
-            // Show no profile state
+            // Reset UI to no profile state
             setTimeout(() => {
                 currentProfile = null;
                 showNoProfile();
@@ -499,7 +534,8 @@ async function handleDelete() {
     } catch (error) {
         console.error('Error deleting profile:', error);
         deleteBtn.textContent = '❌ Error';
-        alert(`Failed to delete profile: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Failed to delete profile: ${errorMessage}`);
         
         setTimeout(() => {
             deleteBtn.textContent = originalText;
@@ -511,7 +547,7 @@ async function handleDelete() {
 /**
  * Show loading state
  */
-function showLoading() {
+function showLoading(): void {
     loadingDiv.style.display = 'block';
     errorDiv.style.display = 'none';
     noProfileDiv.style.display = 'none';
@@ -521,16 +557,16 @@ function showLoading() {
 /**
  * Hide loading state
  */
-function hideLoading() {
+function hideLoading(): void {
     loadingDiv.style.display = 'none';
 }
 
 /**
  * Show error state
  */
-function showError(message) {
-    errorMessage.textContent = message;
+function showError(message: string): void {
     errorDiv.style.display = 'block';
+    errorMessage.textContent = message;
     loadingDiv.style.display = 'none';
     noProfileDiv.style.display = 'none';
     profileContentDiv.style.display = 'none';
@@ -539,125 +575,121 @@ function showError(message) {
 /**
  * Hide error state
  */
-function hideError() {
+function hideError(): void {
     errorDiv.style.display = 'none';
 }
 
 /**
  * Show no profile state
  */
-function showNoProfile() {
+function showNoProfile(): void {
     noProfileDiv.style.display = 'block';
     loadingDiv.style.display = 'none';
     errorDiv.style.display = 'none';
     profileContentDiv.style.display = 'none';
+    editModeBtn.style.display = 'none';
 }
 
 /**
  * Hide no profile state
  */
-function hideNoProfile() {
+function hideNoProfile(): void {
     noProfileDiv.style.display = 'none';
 }
 
 /**
  * Handle close button click
  */
-function handleClose() {
+function handleClose(): void {
     // Check for unsaved changes
     if (hasUnsavedChanges) {
         const confirmed = confirm(
-            'You have unsaved changes that will be lost.\n\n' +
-            'Are you sure you want to close without saving?'
+            'You have unsaved changes. Are you sure you want to close without saving?'
         );
         if (!confirmed) {
             return;
         }
     }
     
-    console.log('Closing profile management window...');
-    if (window.electronAPI && window.electronAPI.closeWindow) {
-        window.electronAPI.closeWindow();
-    } else {
-        // Fallback: close the window using standard method
-        window.close();
-    }
+    (window as any).electronAPI.closeWindow();
 }
-
-// =============================================================================
-// EDIT MODE FUNCTIONALITY
-// =============================================================================
 
 /**
  * Enter edit mode
  */
-function enterEditMode() {
+function enterEditMode(): void {
     console.log('Entering edit mode...');
-    isEditMode = true;
     
-    // Update UI state
+    isEditMode = true;
+    hasUnsavedChanges = false;
+    
+    // Update UI
     editModeBtn.style.display = 'none';
-    editModeActions.style.display = 'flex';
     normalModeActions.style.display = 'none';
+    editModeActions.style.display = 'flex';
     likesEditControls.style.display = 'block';
     dislikesEditControls.style.display = 'block';
     
-    // Refresh the preferences display to show remove buttons
-    updatePreferences(currentProfile);
+    // Refresh preferences display to show edit controls
+    updatePreferences();
 }
 
 /**
  * Exit edit mode
  */
-function exitEditMode() {
+function exitEditMode(): void {
     console.log('Exiting edit mode...');
+    
     isEditMode = false;
     hasUnsavedChanges = false;
     
-    // Update UI state
+    // Reset staged changes to current profile
+    if (currentProfile) {
+        stagedChanges.likes = [...currentProfile.likes];
+        stagedChanges.dislikes = [...currentProfile.dislikes];
+    }
+    
+    // Update UI
     editModeBtn.style.display = 'inline-flex';
-    editModeActions.style.display = 'none';
     normalModeActions.style.display = 'flex';
+    editModeActions.style.display = 'none';
     likesEditControls.style.display = 'none';
     dislikesEditControls.style.display = 'none';
     
-    // Clear inputs
+    // Clear input fields
     addLikeInput.value = '';
     addDislikeInput.value = '';
-    addLikeInput.classList.remove('error');
-    addDislikeInput.classList.remove('error');
     
-    // Refresh the preferences display to hide remove buttons
-    updatePreferences(currentProfile);
+    // Refresh preferences display
+    updatePreferences(currentProfile || undefined);
 }
 
 /**
  * Cancel edit mode
  */
-function cancelEdit() {
-    console.log('Canceling edit mode...');
-    
-    // Restore original data
-    if (currentProfile) {
-        stagedChanges.likes = [...currentProfile.likes];
-        stagedChanges.dislikes = [...currentProfile.dislikes];
+function cancelEdit(): void {
+    if (hasUnsavedChanges) {
+        const confirmed = confirm('Are you sure you want to cancel? All changes will be lost.');
+        if (!confirmed) {
+            return;
+        }
     }
     
     exitEditMode();
 }
 
 /**
- * Save changes
+ * Save changes made in edit mode
  */
-async function saveChanges() {
+async function saveChanges(): Promise<void> {
     console.log('Saving changes...');
     
-    const originalText = saveChangesBtn.textContent;
+    const originalText = saveChangesBtn.textContent || 'Save Changes';
     saveChangesBtn.textContent = '💾 Saving...';
     saveChangesBtn.disabled = true;
     
     try {
-        const result = await window.electronAPI.updateProfileManual(
+        const result = await (window as any).electronAPI.updateProfileManual(
             stagedChanges.likes,
             stagedChanges.dislikes
         );
@@ -665,20 +697,16 @@ async function saveChanges() {
         if (result.success) {
             saveChangesBtn.textContent = '✅ Saved';
             
-            // Update the current profile with saved changes
-            currentProfile.likes = [...stagedChanges.likes];
-            currentProfile.dislikes = [...stagedChanges.dislikes];
-            currentProfile.changelog = 'User manually adjusted likes/dislikes';
-            currentProfile.last_updated = new Date();
+            // Update current profile with new data
+            if (result.profile) {
+                currentProfile = result.profile;
+            }
             
-            // Exit edit mode
+            // Exit edit mode after successful save
             setTimeout(() => {
                 exitEditMode();
                 saveChangesBtn.textContent = originalText;
                 saveChangesBtn.disabled = false;
-                
-                // Refresh to get updated profile from server
-                handleRefresh();
             }, 1500);
         } else {
             throw new Error(result.message || 'Failed to save changes');
@@ -686,7 +714,8 @@ async function saveChanges() {
     } catch (error) {
         console.error('Error saving changes:', error);
         saveChangesBtn.textContent = '❌ Error';
-        alert(`Failed to save changes: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Failed to save changes: ${errorMessage}`);
         
         setTimeout(() => {
             saveChangesBtn.textContent = originalText;
@@ -698,88 +727,93 @@ async function saveChanges() {
 /**
  * Add a new preference
  */
-function addPreference(type) {
+function addPreference(type: 'like' | 'dislike'): void {
     const input = type === 'like' ? addLikeInput : addDislikeInput;
     const value = input.value.trim();
     
-    // Validate input
     if (!validatePreferenceInput(value)) {
-        input.classList.add('error');
-        return;
-    }
-    
-    // Check limit
-    const currentArray = type === 'like' ? stagedChanges.likes : stagedChanges.dislikes;
-    if (currentArray.length >= 15) {
-        alert(`Maximum 15 ${type}s allowed.`);
         return;
     }
     
     // Add to staged changes
-    currentArray.push(value);
-    hasUnsavedChanges = true;
+    if (type === 'like') {
+        stagedChanges.likes.push(value);
+    } else {
+        stagedChanges.dislikes.push(value);
+    }
     
     // Clear input
     input.value = '';
-    input.classList.remove('error');
+    
+    // Mark as having unsaved changes
+    hasUnsavedChanges = true;
     
     // Update display
-    updatePreferences(currentProfile);
+    updatePreferences();
     
-    console.log(`Added ${type}: "${value}"`);
+    console.log(`Added ${type}: ${value}`);
 }
 
 /**
  * Remove a preference
  */
-function removePreference(type, index) {
-    const currentArray = type === 'like' ? stagedChanges.likes : stagedChanges.dislikes;
-    const removed = currentArray.splice(index, 1)[0];
+function removePreference(type: 'like' | 'dislike', index: number): void {
+    if (type === 'like') {
+        stagedChanges.likes.splice(index, 1);
+    } else {
+        stagedChanges.dislikes.splice(index, 1);
+    }
+    
+    // Mark as having unsaved changes
     hasUnsavedChanges = true;
     
     // Update display
-    updatePreferences(currentProfile);
+    updatePreferences();
     
-    console.log(`Removed ${type}: "${removed}"`);
+    console.log(`Removed ${type} at index ${index}`);
 }
 
 /**
  * Validate preference input
  */
-function validatePreferenceInput(value) {
-    return value.length >= 5 && value.trim().length >= 5;
+function validatePreferenceInput(value: string): boolean {
+    if (!value || value.length < 2) {
+        alert('Preference must be at least 2 characters long');
+        return false;
+    }
+    
+    if (value.length > 100) {
+        alert('Preference must be less than 100 characters');
+        return false;
+    }
+    
+    return true;
 }
 
 /**
- * Validate input field
+ * Validate input field and show visual feedback
  */
-function validateInput(input) {
+function validateInput(input: HTMLInputElement): void {
     const value = input.value.trim();
-    if (value.length > 0 && !validatePreferenceInput(value)) {
-        input.classList.add('error');
+    
+    if (value.length > 0 && value.length < 2) {
+        input.classList.add('invalid');
+    } else if (value.length > 100) {
+        input.classList.add('invalid');
     } else {
-        input.classList.remove('error');
+        input.classList.remove('invalid');
     }
 }
 
 /**
- * Update count displays
+ * Update count displays in edit mode
  */
-function updateCountDisplays() {
-    const likes = isEditMode ? stagedChanges.likes : (currentProfile?.likes || []);
-    const dislikes = isEditMode ? stagedChanges.dislikes : (currentProfile?.dislikes || []);
-    
-    likesCountDisplay.textContent = `${likes.length}/15`;
-    dislikesCountDisplay.textContent = `${dislikes.length}/15`;
-    
-    // Update color based on limit
-    likesCountDisplay.style.color = likes.length >= 15 ? 'var(--warning-color)' : '';
-    dislikesCountDisplay.style.color = dislikes.length >= 15 ? 'var(--warning-color)' : '';
+function updateCountDisplays(): void {
+    if (isEditMode) {
+        likesCountDisplay.textContent = stagedChanges.likes.length.toString();
+        dislikesCountDisplay.textContent = stagedChanges.dislikes.length.toString();
+    }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeProfileManagement);
-} else {
-    initializeProfileManagement();
-} 
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', initializeProfileManagement); 

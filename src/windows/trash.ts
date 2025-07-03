@@ -1,37 +1,63 @@
 // Trash window renderer script
-document.addEventListener('DOMContentLoaded', async () => {
-    // Get DOM elements
-    const articlesContainer = document.getElementById('articles-container');
-    const articleCountElement = document.getElementById('article-count');
-    const closeBtn = document.getElementById('close-btn');
+// Browser-compatible version without module exports
 
-    // Article data type (simplified for browser context)
-    const ArticleData = {
-        url: '',
-        title: '',
-        author: '',
-        rss_excerpt: '',
-        full_content_text: '',
-        source_name: '',
-        published_at: null,
-        fetched_at: null,
-        ai_summary: '',
-        ai_score: 0,
-        ai_category: '',
-        is_read: false,
-        is_hidden: false,
-        is_favorite: false,
-        relevant: null,  // null = unrated, true = relevant, false = not relevant
-        rated_at: null,
-        content_source: 'rss',
-        scraping_status: 'pending',
-        scraping_error: null,
-        content_length: 0
-    };
+console.log('Trash TS loaded');
+
+// Type definitions for Firebase Timestamp
+interface FirebaseTimestamp {
+  toDate(): Date;
+}
+
+// Article data interface
+interface ArticleData {
+  url: string;
+  title: string;
+  author: string;
+  rss_excerpt: string;
+  full_content_text: string;
+  source_name: string;
+  published_at: FirebaseTimestamp | Date | null;
+  fetched_at: FirebaseTimestamp | Date | null;
+  ai_summary: string;
+  ai_score: number;
+  ai_category: string;
+  is_read: boolean;
+  is_hidden: boolean;
+  is_favorite: boolean;
+  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
+  rated_at: FirebaseTimestamp | Date | null;
+  content_source: 'rss' | 'scraped';
+  scraping_status: 'pending' | 'completed' | 'failed';
+  scraping_error: string | null;
+  content_length: number;
+}
+
+// Firebase configuration interface
+interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+}
+
+// Window API interface
+interface TrashWindowAPI {
+  closeWindow: () => void;
+  getFirebaseConfig: () => Promise<FirebaseConfig | null>;
+  unrateArticle: (articleUrl: string) => Promise<boolean>;
+}
+
+document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
+    // Get DOM elements
+    const articlesContainer = document.getElementById('articles-container') as HTMLDivElement;
+    const articleCountElement = document.getElementById('article-count') as HTMLElement;
+    const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
 
     // Event listeners
     closeBtn.addEventListener('click', () => {
-        window.trashAPI.closeWindow();
+        (window as any).trashAPI.closeWindow();
     });
 
     // Initialize the trash window
@@ -40,12 +66,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Initialize the trash window and load not relevant articles
      */
-    async function initializeTrashWindow() {
+    async function initializeTrashWindow(): Promise<void> {
         try {
             console.log('Initializing trash window...');
             
             // Get Firebase config from main process
-            const firebaseConfig = await window.trashAPI.getFirebaseConfig();
+            const firebaseConfig = await (window as any).trashAPI.getFirebaseConfig();
             
             if (!firebaseConfig) {
                 showError('Firebase configuration not available');
@@ -57,19 +83,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             
         } catch (error) {
             console.error('Error initializing trash window:', error);
-            showError(`Error: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            showError(`Error: ${errorMessage}`);
         }
     }
 
     /**
      * Initialize Firebase and set up real-time listener
      */
-    async function initializeFirebase(config) {
+    async function initializeFirebase(config: FirebaseConfig): Promise<void> {
         try {
             // Load Firebase SDK dynamically
             await loadFirebaseSDK();
             
-            const firebase = window.firebase;
+            const firebase = (window as any).firebase;
             if (!firebase) {
                 throw new Error('Firebase SDK not loaded');
             }
@@ -87,17 +114,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             
         } catch (error) {
             console.error('Error initializing Firebase:', error);
-            showError(`Firebase initialization failed: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            showError(`Firebase initialization failed: ${errorMessage}`);
         }
     }
 
     /**
      * Load Firebase SDK scripts
      */
-    async function loadFirebaseSDK() {
+    async function loadFirebaseSDK(): Promise<void> {
         return new Promise((resolve, reject) => {
             // Check if Firebase is already loaded
-            if (window.firebase) {
+            if ((window as any).firebase) {
                 resolve();
                 return;
             }
@@ -128,13 +156,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Set up real-time listener for not relevant articles
      */
-    function setupArticleListener(db) {
+    function setupArticleListener(db: any): void {
         console.log('Setting up real-time listener for not relevant articles...');
         
         // Query for articles where relevant === false
         const articlesRef = db.collection('articles').where('relevant', '==', false);
         
-        articlesRef.onSnapshot((snapshot) => {
+        articlesRef.onSnapshot((snapshot: any) => {
             console.log(`Received ${snapshot.docs.length} not relevant articles from Firestore`);
             
             if (!articlesContainer) return;
@@ -143,8 +171,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             articlesContainer.innerHTML = '';
             
             // Convert snapshot to array
-            const notRelevantArticles = [];
-            snapshot.forEach((doc) => {
+            const notRelevantArticles: ArticleData[] = [];
+            snapshot.forEach((doc: any) => {
                 const articleData = doc.data();
                 notRelevantArticles.push(articleData);
             });
@@ -158,8 +186,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 // Sort by published date (newest first)
                 notRelevantArticles.sort((a, b) => {
-                    const dateA = a.published_at?.toDate ? a.published_at.toDate() : new Date(a.published_at);
-                    const dateB = b.published_at?.toDate ? b.published_at.toDate() : new Date(b.published_at);
+                    const dateA = a.published_at && typeof (a.published_at as FirebaseTimestamp).toDate === 'function' 
+                        ? (a.published_at as FirebaseTimestamp).toDate() 
+                        : new Date(a.published_at as Date);
+                    const dateB = b.published_at && typeof (b.published_at as FirebaseTimestamp).toDate === 'function' 
+                        ? (b.published_at as FirebaseTimestamp).toDate() 
+                        : new Date(b.published_at as Date);
                     return dateB.getTime() - dateA.getTime();
                 });
                 
@@ -170,7 +202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             console.log(`Displayed ${notRelevantArticles.length} not relevant articles`);
-        }, (error) => {
+        }, (error: Error) => {
             console.error('Error listening to not relevant articles:', error);
             showError('Error loading articles. Check console for details.');
         });
@@ -179,15 +211,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Create HTML element for an article
      */
-    function createArticleElement(article) {
+    function createArticleElement(article: ArticleData): HTMLDivElement {
         const articleElement = document.createElement('div');
         articleElement.classList.add('article');
         
         // Handle Firestore Timestamp
-        let publishedDate;
+        let publishedDate: string;
         try {
-            if (article.published_at && typeof article.published_at.toDate === 'function') {
-                publishedDate = article.published_at.toDate().toLocaleDateString();
+            if (article.published_at && typeof (article.published_at as FirebaseTimestamp).toDate === 'function') {
+                publishedDate = (article.published_at as FirebaseTimestamp).toDate().toLocaleDateString();
             } else if (article.published_at instanceof Date) {
                 publishedDate = article.published_at.toLocaleDateString();
             } else {
@@ -199,10 +231,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // Handle rated date
-        let ratedDate;
+        let ratedDate: string;
         try {
-            if (article.rated_at && typeof article.rated_at.toDate === 'function') {
-                ratedDate = article.rated_at.toDate().toLocaleDateString();
+            if (article.rated_at && typeof (article.rated_at as FirebaseTimestamp).toDate === 'function') {
+                ratedDate = (article.rated_at as FirebaseTimestamp).toDate().toLocaleDateString();
             } else if (article.rated_at instanceof Date) {
                 ratedDate = article.rated_at.toLocaleDateString();
             } else {
@@ -242,9 +274,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
         
         // Add event listener for unrate button
-        const unrateButton = articleElement.querySelector('.unrate-btn');
+        const unrateButton = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
         if (unrateButton) {
-            unrateButton.addEventListener('click', async (e) => {
+            unrateButton.addEventListener('click', async (e: Event) => {
                 e.preventDefault();
                 const articleUrl = unrateButton.getAttribute('data-article-url');
                 
@@ -260,12 +292,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Unrate an article (set relevant back to null)
      */
-    async function unrateArticle(articleUrl, articleElement) {
+    async function unrateArticle(articleUrl: string, articleElement: HTMLDivElement): Promise<void> {
         try {
             console.log(`Unrating article: ${articleUrl}`);
             
             // Show loading state
-            const unrateButton = articleElement.querySelector('.unrate-btn');
+            const unrateButton = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
             if (unrateButton) {
                 unrateButton.innerHTML = '⏳ Unrating...';
                 unrateButton.disabled = true;
@@ -281,7 +313,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             
             // Get Firebase instance - use the existing app
-            const firebase = window.firebase;
+            const firebase = (window as any).firebase;
+            if (!firebase) {
+                throw new Error('Firebase not available');
+            }
+            
             const app = firebase.app('trash-app');
             const db = firebase.firestore(app);
             
@@ -313,7 +349,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Error unrating article:', error);
             
             // Show error and restore button
-            const unrateButton = articleElement.querySelector('.unrate-btn');
+            const unrateButton = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
             if (unrateButton) {
                 unrateButton.innerHTML = '❌ Error - Try Again';
                 unrateButton.disabled = false;
@@ -330,7 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Update the article count display
      */
-    function updateArticleCount(count) {
+    function updateArticleCount(count: number): void {
         if (articleCountElement) {
             if (count === 0) {
                 articleCountElement.textContent = 'No articles in trash';
@@ -345,7 +381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Show empty state when no articles are found
      */
-    function showEmptyState() {
+    function showEmptyState(): void {
         articlesContainer.innerHTML = `
             <div class="empty-state">
                 <h2>🎉 Trash is Empty!</h2>
@@ -358,7 +394,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Show error state
      */
-    function showError(message) {
+    function showError(message: string): void {
         articlesContainer.innerHTML = `
             <div class="error-state">
                 <h2>⚠️ Error</h2>
@@ -374,7 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Escape HTML to prevent XSS
      */
-    function escapeHtml(text) {
+    function escapeHtml(text: string): string {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;

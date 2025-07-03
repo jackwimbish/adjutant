@@ -1,25 +1,39 @@
 // Settings window renderer script
-document.addEventListener('DOMContentLoaded', async () => {
+// Browser-compatible version without module exports
+
+document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
     // Get DOM elements
-    const form = document.getElementById('settings-form');
-    const statusMessage = document.getElementById('status-message');
-    const saveBtn = document.getElementById('save-btn');
-    const cancelBtn = document.getElementById('cancel-btn');
-    const testFirebaseBtn = document.getElementById('test-firebase');
-    const testOpenAIBtn = document.getElementById('test-openai');
+    const form = document.getElementById('settings-form') as HTMLFormElement;
+    const statusMessage = document.getElementById('status-message') as HTMLDivElement;
+    const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+    const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
+    const testFirebaseBtn = document.getElementById('test-firebase') as HTMLButtonElement;
+    const testOpenAIBtn = document.getElementById('test-openai') as HTMLButtonElement;
 
     // Form input elements
-    const inputs = {
+    const inputs: {
         firebase: {
-            apiKey: document.getElementById('firebase-api-key'),
-            authDomain: document.getElementById('firebase-auth-domain'),
-            projectId: document.getElementById('firebase-project-id'),
-            storageBucket: document.getElementById('firebase-storage-bucket'),
-            messagingSenderId: document.getElementById('firebase-messaging-sender-id'),
-            appId: document.getElementById('firebase-app-id')
+            apiKey: HTMLInputElement;
+            authDomain: HTMLInputElement;
+            projectId: HTMLInputElement;
+            storageBucket: HTMLInputElement;
+            messagingSenderId: HTMLInputElement;
+            appId: HTMLInputElement
+        };
+        openai: {
+            apiKey: HTMLInputElement
+        }
+    } = {
+        firebase: {
+            apiKey: document.getElementById('firebase-api-key') as HTMLInputElement,
+            authDomain: document.getElementById('firebase-auth-domain') as HTMLInputElement,
+            projectId: document.getElementById('firebase-project-id') as HTMLInputElement,
+            storageBucket: document.getElementById('firebase-storage-bucket') as HTMLInputElement,
+            messagingSenderId: document.getElementById('firebase-messaging-sender-id') as HTMLInputElement,
+            appId: document.getElementById('firebase-app-id') as HTMLInputElement
         },
         openai: {
-            apiKey: document.getElementById('openai-api-key')
+            apiKey: document.getElementById('openai-api-key') as HTMLInputElement
         }
     };
 
@@ -27,10 +41,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     /**
      * Set button loading state
-     * @param {HTMLElement} button - The button element
-     * @param {boolean} isLoading - Whether the button should be in loading state
+     * @param button - The button element
+     * @param isLoading - Whether the button should be in loading state
      */
-    function setButtonLoading(button, isLoading) {
+    function setButtonLoading(button: HTMLButtonElement, isLoading: boolean): void {
         button.disabled = isLoading;
         if (isLoading) {
             button.classList.add('loading');
@@ -41,10 +55,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Show status message to user
-     * @param {string} message - The message to display
-     * @param {string} type - The type of message ('info', 'success', 'error')
+     * @param message - The message to display
+     * @param type - The type of message ('info', 'success', 'error')
      */
-    function showStatus(message, type) {
+    function showStatus(message: string, type: 'info' | 'success' | 'error'): void {
         statusMessage.textContent = message;
         statusMessage.className = `status-message ${type} show`;
         
@@ -58,27 +72,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Higher-order function to handle API calls with consistent error handling and loading states
-     * @param {HTMLElement} button - The button to manage loading state for
-     * @param {Function} apiFunction - The async function to execute
-     * @param {string} loadingMessage - Message to show while loading
-     * @param {string} successMessage - Message to show on success
-     * @param {string} errorPrefix - Prefix for error messages
-     * @returns {Function} - The wrapped function
+     * @param button - The button to manage loading state for
+     * @param apiFunction - The async function to execute
+     * @param loadingMessage - Message to show while loading
+     * @param successMessage - Message to show on success
+     * @param errorPrefix - Prefix for error messages
+     * @returns The wrapped function
      */
-    function withApiCall(button, apiFunction, loadingMessage, successMessage, errorPrefix) {
-        return async function(...args) {
+    function withApiCall<T extends any[], R>(
+        button: HTMLButtonElement, 
+        apiFunction: (...args: T) => Promise<R>, 
+        loadingMessage: string, 
+        successMessage: string, 
+        errorPrefix: string
+    ): (...args: T) => Promise<R | false> {
+        return async function(...args: T): Promise<R | false> {
             try {
                 showStatus(loadingMessage, 'info');
                 setButtonLoading(button, true);
 
-                const result = await apiFunction.apply(this, args);
+                const result = await apiFunction(...args);
                 
-                if (result && result.success !== undefined) {
+                if (result && typeof result === 'object' && 'success' in result) {
                     // Handle API responses with success/message format
-                    if (result.success) {
+                    const apiResult = result as unknown as { success: boolean; message: string };
+                    if (apiResult.success) {
                         showStatus(successMessage, 'success');
                     } else {
-                        showStatus(`${errorPrefix}: ${result.message}`, 'error');
+                        showStatus(`${errorPrefix}: ${apiResult.message}`, 'error');
                     }
                 } else if (result !== false) {
                     // Handle boolean/truthy responses
@@ -90,7 +111,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return result;
             } catch (error) {
                 console.error(`${errorPrefix}:`, error);
-                showStatus(`${errorPrefix}: ${error.message}`, 'error');
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                showStatus(`${errorPrefix}: ${errorMessage}`, 'error');
                 return false;
             } finally {
                 setButtonLoading(button, false);
@@ -108,7 +130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     const handleFormSubmit = withApiCall(
         saveBtn,
-        async function(event) {
+        async function(event: Event): Promise<boolean> {
             event.preventDefault();
             
             if (!validateForm()) {
@@ -134,7 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Handle cancel button click
      */
-    function handleCancel() {
+    function handleCancel(): void {
         window.settingsAPI.closeWindow();
     }
 
@@ -143,12 +165,12 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     const handleTestFirebase = withApiCall(
         testFirebaseBtn,
-        async function() {
+        async function(): Promise<{ success: boolean; message: string }> {
             const firebaseConfig = getFirebaseConfigFromForm();
             
             if (!validateFirebaseConfig(firebaseConfig)) {
                 showStatus('Please fill in all Firebase fields before testing', 'error');
-                return false;
+                return { success: false, message: 'Incomplete configuration' };
             }
 
             return await window.settingsAPI.testFirebase(firebaseConfig);
@@ -163,12 +185,12 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     const handleTestOpenAI = withApiCall(
         testOpenAIBtn,
-        async function() {
+        async function(): Promise<{ success: boolean; message: string }> {
             const openaiConfig = getOpenAIConfigFromForm();
             
             if (!openaiConfig.apiKey.trim()) {
                 showStatus('Please enter OpenAI API key before testing', 'error');
-                return false;
+                return { success: false, message: 'API key required' };
             }
 
             return await window.settingsAPI.testOpenAI(openaiConfig);
@@ -195,14 +217,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Load existing configuration and populate form
      */
-    async function loadExistingConfig() {
+    async function loadExistingConfig(): Promise<void> {
         try {
             const config = await window.settingsAPI.loadConfig();
             if (config) {
                 // Populate Firebase fields
-                Object.keys(inputs.firebase).forEach(key => {
-                    if (config.firebase[key]) {
-                        inputs.firebase[key].value = config.firebase[key];
+                Object.keys(inputs.firebase).forEach((key) => {
+                    const inputKey = key as keyof typeof inputs.firebase;
+                    const configKey = key as keyof typeof config.firebase;
+                    if (config.firebase[configKey]) {
+                        inputs.firebase[inputKey].value = config.firebase[configKey];
                     }
                 });
 
@@ -220,10 +244,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Get complete configuration from form
      */
-    function getConfigFromForm() {
+    function getConfigFromForm(): {
+        firebase: {
+            apiKey: string;
+            authDomain: string;
+            projectId: string;
+            storageBucket: string;
+            messagingSenderId: string;
+            appId: string;
+        };
+        openai: {
+            apiKey: string;
+        };
+        appSettings: {
+            topicDescription: string;
+        };
+        firstRun: boolean;
+    } {
         return {
             firebase: getFirebaseConfigFromForm(),
             openai: getOpenAIConfigFromForm(),
+            appSettings: {
+                topicDescription: 'developer-focused AI stories' // Default value
+            },
             firstRun: false
         };
     }
@@ -231,7 +274,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Get Firebase configuration from form
      */
-    function getFirebaseConfigFromForm() {
+    function getFirebaseConfigFromForm(): {
+        apiKey: string;
+        authDomain: string;
+        projectId: string;
+        storageBucket: string;
+        messagingSenderId: string;
+        appId: string;
+    } {
         return {
             apiKey: inputs.firebase.apiKey.value.trim(),
             authDomain: inputs.firebase.authDomain.value.trim(),
@@ -245,7 +295,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Get OpenAI configuration from form
      */
-    function getOpenAIConfigFromForm() {
+    function getOpenAIConfigFromForm(): {
+        apiKey: string;
+    } {
         return {
             apiKey: inputs.openai.apiKey.value.trim()
         };
@@ -254,7 +306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Validate the entire form
      */
-    function validateForm() {
+    function validateForm(): boolean {
         const firebaseConfig = getFirebaseConfigFromForm();
         const openaiConfig = getOpenAIConfigFromForm();
 
@@ -279,15 +331,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Validate Firebase configuration
      */
-    function validateFirebaseConfig(config) {
-        const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+    function validateFirebaseConfig(config: {
+        apiKey: string;
+        authDomain: string;
+        projectId: string;
+        storageBucket: string;
+        messagingSenderId: string;
+        appId: string;
+    }): boolean {
+        const requiredFields: (keyof typeof config)[] = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
         return requiredFields.every(field => config[field] && config[field].length > 0);
     }
 
     /**
      * Clean up event listeners when window closes
      */
-    window.addEventListener('beforeunload', () => {
+    window.addEventListener('beforeunload', (): void => {
         window.settingsAPI.removeAllListeners();
     });
 });
@@ -295,6 +354,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 /**
  * Switch to topic settings page
  */
-function switchToTopicSettings() {
+function switchToTopicSettings(): void {
     window.settingsAPI.openTopicSettings();
 } 
