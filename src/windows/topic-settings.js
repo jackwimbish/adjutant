@@ -11,6 +11,43 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
+ * Set button loading state
+ * @param {HTMLElement} button - The button element
+ * @param {boolean} isLoading - Whether the button should be in loading state
+ * @param {string} loadingText - Text to show when loading
+ * @param {string} originalText - Original button text
+ */
+function setButtonLoading(button, isLoading, loadingText = 'Loading...', originalText = null) {
+    if (isLoading) {
+        if (!originalText) {
+            button.dataset.originalText = button.textContent;
+        }
+        button.textContent = loadingText;
+        button.disabled = true;
+    } else {
+        button.textContent = originalText || button.dataset.originalText || button.textContent;
+        button.disabled = false;
+        delete button.dataset.originalText;
+    }
+}
+
+/**
+ * Show status message
+ * @param {string} message - The message to display
+ * @param {string} type - The type of message ('success', 'error')
+ */
+function showStatus(message, type) {
+    const statusDiv = document.getElementById('status');
+    statusDiv.textContent = message;
+    statusDiv.className = `status ${type} show`;
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        statusDiv.classList.remove('show');
+    }, 5000);
+}
+
+/**
  * Load current settings from the main process
  */
 async function loadCurrentSettings() {
@@ -38,12 +75,10 @@ async function handleSaveSettings(event) {
     event.preventDefault();
     
     const saveBtn = document.getElementById('saveBtn');
-    const originalText = saveBtn.textContent;
     
     try {
         // Show loading state
-        saveBtn.textContent = 'Saving...';
-        saveBtn.disabled = true;
+        setButtonLoading(saveBtn, true, 'Saving...');
         
         // Get form data
         const formData = new FormData(event.target);
@@ -76,23 +111,8 @@ async function handleSaveSettings(event) {
         showStatus('Error saving settings. Please try again.', 'error');
     } finally {
         // Reset button state
-        saveBtn.textContent = originalText;
-        saveBtn.disabled = false;
+        setButtonLoading(saveBtn, false);
     }
-}
-
-/**
- * Show status message
- */
-function showStatus(message, type) {
-    const statusDiv = document.getElementById('status');
-    statusDiv.textContent = message;
-    statusDiv.className = `status ${type} show`;
-    
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
-        statusDiv.classList.remove('show');
-    }, 5000);
 }
 
 /**

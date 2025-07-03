@@ -23,8 +23,160 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // UI Helper Functions
+    
+    /**
+     * Set button loading state
+     * @param {HTMLElement} button - The button element
+     * @param {boolean} isLoading - Whether the button should be in loading state
+     */
+    function setButtonLoading(button, isLoading) {
+        button.disabled = isLoading;
+        if (isLoading) {
+            button.classList.add('loading');
+        } else {
+            button.classList.remove('loading');
+        }
+    }
+
+    /**
+     * Show status message to user
+     * @param {string} message - The message to display
+     * @param {string} type - The type of message ('info', 'success', 'error')
+     */
+    function showStatus(message, type) {
+        statusMessage.textContent = message;
+        statusMessage.className = `status-message ${type} show`;
+        
+        // Auto-hide after 5 seconds for non-persistent messages
+        if (type !== 'info') {
+            setTimeout(() => {
+                statusMessage.classList.remove('show');
+            }, 5000);
+        }
+    }
+
+    /**
+     * Higher-order function to handle API calls with consistent error handling and loading states
+     * @param {HTMLElement} button - The button to manage loading state for
+     * @param {Function} apiFunction - The async function to execute
+     * @param {string} loadingMessage - Message to show while loading
+     * @param {string} successMessage - Message to show on success
+     * @param {string} errorPrefix - Prefix for error messages
+     * @returns {Function} - The wrapped function
+     */
+    function withApiCall(button, apiFunction, loadingMessage, successMessage, errorPrefix) {
+        return async function(...args) {
+            try {
+                showStatus(loadingMessage, 'info');
+                setButtonLoading(button, true);
+
+                const result = await apiFunction.apply(this, args);
+                
+                if (result && result.success !== undefined) {
+                    // Handle API responses with success/message format
+                    if (result.success) {
+                        showStatus(successMessage, 'success');
+                    } else {
+                        showStatus(`${errorPrefix}: ${result.message}`, 'error');
+                    }
+                } else if (result !== false) {
+                    // Handle boolean/truthy responses
+                    showStatus(successMessage, 'success');
+                } else {
+                    showStatus(`${errorPrefix}. Please try again.`, 'error');
+                }
+                
+                return result;
+            } catch (error) {
+                console.error(`${errorPrefix}:`, error);
+                showStatus(`${errorPrefix}: ${error.message}`, 'error');
+                return false;
+            } finally {
+                setButtonLoading(button, false);
+            }
+        };
+    }
+
     // Load existing configuration on startup
     await loadExistingConfig();
+
+    // Define event handlers first
+    
+    /**
+     * Handle form submission
+     */
+    const handleFormSubmit = withApiCall(
+        saveBtn,
+        async function(event) {
+            event.preventDefault();
+            
+            if (!validateForm()) {
+                return false;
+            }
+
+            const config = getConfigFromForm();
+            const success = await window.settingsAPI.saveConfig(config);
+            
+            if (success) {
+                setTimeout(() => {
+                    window.settingsAPI.closeWindow();
+                }, 1500);
+            }
+            
+            return success;
+        },
+        'Saving configuration...',
+        'Configuration saved successfully!',
+        'Failed to save configuration'
+    );
+
+    /**
+     * Handle cancel button click
+     */
+    function handleCancel() {
+        window.settingsAPI.closeWindow();
+    }
+
+    /**
+     * Handle Firebase connection test
+     */
+    const handleTestFirebase = withApiCall(
+        testFirebaseBtn,
+        async function() {
+            const firebaseConfig = getFirebaseConfigFromForm();
+            
+            if (!validateFirebaseConfig(firebaseConfig)) {
+                showStatus('Please fill in all Firebase fields before testing', 'error');
+                return false;
+            }
+
+            return await window.settingsAPI.testFirebase(firebaseConfig);
+        },
+        'Testing Firebase connection...',
+        'Firebase connection successful!',
+        'Firebase connection failed'
+    );
+
+    /**
+     * Handle OpenAI connection test
+     */
+    const handleTestOpenAI = withApiCall(
+        testOpenAIBtn,
+        async function() {
+            const openaiConfig = getOpenAIConfigFromForm();
+            
+            if (!openaiConfig.apiKey.trim()) {
+                showStatus('Please enter OpenAI API key before testing', 'error');
+                return false;
+            }
+
+            return await window.settingsAPI.testOpenAI(openaiConfig);
+        },
+        'Testing OpenAI connection...',
+        'OpenAI connection successful!',
+        'OpenAI connection failed'
+    );
 
     // Event listeners
     form.addEventListener('submit', handleFormSubmit);
@@ -62,113 +214,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('Error loading config:', error);
             showStatus('Error loading existing configuration', 'error');
-        }
-    }
-
-    /**
-     * Handle form submission
-     */
-    async function handleFormSubmit(event) {
-        event.preventDefault();
-        
-        if (!validateForm()) {
-            return;
-        }
-
-        const config = getConfigFromForm();
-        
-        try {
-            showStatus('Saving configuration...', 'info');
-            saveBtn.disabled = true;
-            saveBtn.classList.add('loading');
-
-            const success = await window.settingsAPI.saveConfig(config);
-            
-            if (success) {
-                showStatus('Configuration saved successfully!', 'success');
-                setTimeout(() => {
-                    window.settingsAPI.closeWindow();
-                }, 1500);
-            } else {
-                showStatus('Failed to save configuration. Please try again.', 'error');
-            }
-        } catch (error) {
-            console.error('Error saving config:', error);
-            showStatus('Error saving configuration: ' + error.message, 'error');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.classList.remove('loading');
-        }
-    }
-
-    /**
-     * Handle cancel button click
-     */
-    function handleCancel() {
-        window.settingsAPI.closeWindow();
-    }
-
-    /**
-     * Handle Firebase connection test
-     */
-    async function handleTestFirebase() {
-        const firebaseConfig = getFirebaseConfigFromForm();
-        
-        if (!validateFirebaseConfig(firebaseConfig)) {
-            showStatus('Please fill in all Firebase fields before testing', 'error');
-            return;
-        }
-
-        try {
-            showStatus('Testing Firebase connection...', 'info');
-            testFirebaseBtn.disabled = true;
-            testFirebaseBtn.classList.add('loading');
-
-            const result = await window.settingsAPI.testFirebase(firebaseConfig);
-            
-            if (result.success) {
-                showStatus('Firebase connection successful!', 'success');
-            } else {
-                showStatus('Firebase connection failed: ' + result.message, 'error');
-            }
-        } catch (error) {
-            console.error('Error testing Firebase:', error);
-            showStatus('Error testing Firebase: ' + error.message, 'error');
-        } finally {
-            testFirebaseBtn.disabled = false;
-            testFirebaseBtn.classList.remove('loading');
-        }
-    }
-
-    /**
-     * Handle OpenAI connection test
-     */
-    async function handleTestOpenAI() {
-        const openaiConfig = getOpenAIConfigFromForm();
-        
-        if (!openaiConfig.apiKey.trim()) {
-            showStatus('Please enter OpenAI API key before testing', 'error');
-            return;
-        }
-
-        try {
-            showStatus('Testing OpenAI connection...', 'info');
-            testOpenAIBtn.disabled = true;
-            testOpenAIBtn.classList.add('loading');
-
-            const result = await window.settingsAPI.testOpenAI(openaiConfig);
-            
-            if (result.success) {
-                showStatus('OpenAI connection successful!', 'success');
-            } else {
-                showStatus('OpenAI connection failed: ' + result.message, 'error');
-            }
-        } catch (error) {
-            console.error('Error testing OpenAI:', error);
-            showStatus('Error testing OpenAI: ' + error.message, 'error');
-        } finally {
-            testOpenAIBtn.disabled = false;
-            testOpenAIBtn.classList.remove('loading');
         }
     }
 
@@ -237,21 +282,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     function validateFirebaseConfig(config) {
         const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
         return requiredFields.every(field => config[field] && config[field].length > 0);
-    }
-
-    /**
-     * Show status message to user
-     */
-    function showStatus(message, type) {
-        statusMessage.textContent = message;
-        statusMessage.className = `status-message ${type} show`;
-        
-        // Auto-hide after 5 seconds for non-persistent messages
-        if (type !== 'info') {
-            setTimeout(() => {
-                statusMessage.classList.remove('show');
-            }, 5000);
-        }
     }
 
     /**
