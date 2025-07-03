@@ -3,6 +3,9 @@
 // Make this a module to allow global declarations
 export {};
 
+// Since we can't use ES6 imports in browser context, we'll need to include
+// the service classes directly or use a different loading strategy
+
 // Declare global types for TypeScript
 declare global {
   interface Window {
@@ -15,31 +18,22 @@ declare global {
       appId: string;
     };
     firebase: any; // Firebase SDK loaded via script tag
+    checkProfileThreshold?: () => Promise<void>;
+    checkProfileExists?: () => Promise<void>;
   }
 }
 
-// Article data type (simplified for browser context)
+// Article data interface (duplicated from types to avoid imports)
 interface ArticleData {
   url: string;
   title: string;
-  author: string;
-  rss_excerpt: string;
-  full_content_text: string;
-  source_name: string;
-  published_at: any; // Firestore Timestamp or Date
-  fetched_at: any;
-  ai_summary: string;
-  ai_score: number;
-  ai_category: string;
-  is_read: boolean;
-  is_hidden: boolean;
-  is_favorite: boolean;
-  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
-  rated_at?: any;
-  content_source: 'rss' | 'scraped' | 'failed';
-  scraping_status: 'pending' | 'success' | 'failed';
-  scraping_error?: string | null;
-  content_length: number;
+  summary: string;
+  content: string;
+  score: number;
+  relevant: boolean | null;
+  read: boolean;
+  created_at: Date;
+  rated_at?: Date;
 }
 
 console.log('Renderer script loaded.');
@@ -48,510 +42,357 @@ console.log('Renderer script loaded.');
 const config = (window as any).firebaseConfig;
 console.log('Firebase config found:', config);
 
+// Get DOM elements
 const unratedListDiv = document.getElementById('unrated-list');
 const relevantListDiv = document.getElementById('relevant-list');
 
+// Firebase app and db instances
+let app: any = null;
+let db: any = null;
+
+// Article listeners for cleanup
+let unratedListener: (() => void) | null = null;
+let relevantListener: (() => void) | null = null;
+
+// Initialize the application
 if (!unratedListDiv || !relevantListDiv) {
   console.error('Article list elements not found!');
 } else if (!config || !config.apiKey) {
   console.error('Firebase config not available!');
-  if (unratedListDiv) unratedListDiv.innerHTML = '<p style="color: red;">Error: Firebase configuration not available</p>';
-  if (relevantListDiv) relevantListDiv.innerHTML = '<p style="color: red;">Error: Firebase configuration not available</p>';
+  showConfigError();
 } else {
-  initializeFirebaseAndLoadArticles();
+  initializeApplication();
 }
 
-async function initializeFirebaseAndLoadArticles() {
+/**
+ * Show configuration error in the UI
+ */
+function showConfigError(): void {
+  const errorMessage = '<p style="color: red;">Error: Firebase configuration not available</p>';
+  if (unratedListDiv) unratedListDiv.innerHTML = errorMessage;
+  if (relevantListDiv) relevantListDiv.innerHTML = errorMessage;
+}
+
+/**
+ * Initialize the application
+ */
+async function initializeApplication(): Promise<void> {
   try {
-    console.log('Initializing Firebase...');
+    console.log('Initializing application...');
     
-    // Initialize Firebase using the compat SDK
-    const firebase = (window as any).firebase;
-    if (!firebase) {
-      throw new Error('Firebase SDK not loaded');
-    }
+    // Initialize Firebase
+    initializeFirebase();
     
-    const app = firebase.initializeApp(config);
-    const db = firebase.firestore();
+    // Show loading states
+    showLoading('unrated');
+    showLoading('relevant');
     
-    console.log('Firebase initialized successfully');
+    // Set up article listeners
+    setupArticleListeners();
     
-    // Update UI to show loading
-    if (unratedListDiv) {
-      unratedListDiv.innerHTML = '<p style="color: #888;">Loading unrated articles...</p>';
-    }
-    if (relevantListDiv) {
-      relevantListDiv.innerHTML = '<p style="color: #888;">Loading relevant articles...</p>';
-    }
+    console.log('✅ Application initialized successfully');
     
-    // Set up real-time listener for all articles, filter unrated ones on client side
-    const articlesRef = db.collection('articles');
+  } catch (error) {
+    console.error('Error initializing application:', error);
+    showInitializationError(error);
+  }
+}
+
+/**
+ * Initialize Firebase connection
+ */
+function initializeFirebase(): void {
+  // Create unique app name to avoid conflicts
+  const appName = `renderer-app-${Date.now()}`;
+  app = (window as any).firebase.initializeApp(config, appName);
+  db = (window as any).firebase.firestore(app);
+  console.log('Firebase initialized for renderer');
+}
+
+/**
+ * Set up real-time listeners for articles
+ */
+function setupArticleListeners(): void {
+  // Listen for unrated articles (simplified query to avoid index requirement)
+  const unratedQuery = db.collection('articles')
+    .where('relevant', '==', null);
     
-    console.log('Setting up real-time listener...');
-    
-    articlesRef.onSnapshot((snapshot: any) => {
-      console.log(`Received ${snapshot.docs.length} articles from Firestore`);
-      
-      if (!unratedListDiv || !relevantListDiv) return;
-      
-      // Clear existing content
-      unratedListDiv.innerHTML = '';
-      relevantListDiv.innerHTML = '';
-      
-      // Convert snapshot to arrays and separate by rating
-      const unratedArticles: ArticleData[] = [];
-      const relevantArticles: ArticleData[] = [];
-      
-      snapshot.forEach((doc: any) => {
-        const articleData = doc.data() as ArticleData;
-        
-        if (articleData.relevant === null || articleData.relevant === undefined) {
-          // Unrated articles (null or undefined)
-          unratedArticles.push(articleData);
-        } else if (articleData.relevant === true) {
-          // Relevant articles
-          relevantArticles.push(articleData);
-        }
-        // Skip not relevant articles (relevant === false)
+  unratedListener = unratedQuery.onSnapshot((snapshot: any) => {
+    const articles: ArticleData[] = [];
+    snapshot.forEach((doc: any) => {
+      const data = doc.data();
+      articles.push({
+        url: doc.id,
+        title: data.title || 'No title',
+        summary: data.summary || 'No summary available',
+        content: data.content || '',
+        score: data.score || 0,
+        relevant: data.relevant,
+        read: data.read || false,
+        created_at: data.created_at?.toDate() || new Date(),
+        rated_at: data.rated_at?.toDate()
       });
-      
-      // Sort both arrays by published date (newest first)
-      const sortByDate = (a: ArticleData, b: ArticleData) => {
-        const dateA = a.published_at?.toDate ? a.published_at.toDate() : new Date(a.published_at);
-        const dateB = b.published_at?.toDate ? b.published_at.toDate() : new Date(b.published_at);
-        return dateB.getTime() - dateA.getTime();
-      };
-      
-      unratedArticles.sort(sortByDate);
-      relevantArticles.sort(sortByDate);
-      
-      // Display unrated articles
-      if (unratedArticles.length === 0) {
-        if (snapshot.empty) {
-          unratedListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">No articles found. Run the workflow to fetch some!</p>';
+    });
+    
+    // Sort by created_at in JavaScript instead of Firestore
+    articles.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+    
+    console.log(`Received ${articles.length} unrated articles`);
+    renderArticles(articles, 'unrated');
+  }, (error: any) => {
+    console.error('Error listening to unrated articles:', error);
+    showError('unrated', error.message);
+  });
+
+  // Listen for relevant articles (simplified query to avoid index requirement)
+  const relevantQuery = db.collection('articles')
+    .where('relevant', '==', true);
+    
+  relevantListener = relevantQuery.onSnapshot((snapshot: any) => {
+    const articles: ArticleData[] = [];
+    snapshot.forEach((doc: any) => {
+      const data = doc.data();
+      articles.push({
+        url: doc.id,
+        title: data.title || 'No title',
+        summary: data.summary || 'No summary available',
+        content: data.content || '',
+        score: data.score || 0,
+        relevant: data.relevant,
+        read: data.read || false,
+        created_at: data.created_at?.toDate() || new Date(),
+        rated_at: data.rated_at?.toDate()
+      });
+    });
+    
+    // Sort by created_at in JavaScript instead of Firestore
+    articles.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+    
+    console.log(`Received ${articles.length} relevant articles`);
+    renderArticles(articles, 'relevant');
+  }, (error: any) => {
+    console.error('Error listening to relevant articles:', error);
+    showError('relevant', error.message);
+  });
+}
+
+/**
+ * Render articles in the specified column
+ */
+function renderArticles(articles: ArticleData[], type: 'unrated' | 'relevant'): void {
+  const container = type === 'unrated' ? unratedListDiv : relevantListDiv;
+  if (!container) return;
+
+  if (articles.length === 0) {
+    container.innerHTML = `<p style="color: #888; text-align: center; padding: 20px;">No ${type} articles found</p>`;
+    return;
+  }
+
+  const articlesHtml = articles.map(article => createArticleHtml(article, type)).join('');
+  container.innerHTML = articlesHtml;
+  
+  // Set up event listeners for the new articles
+  setupArticleEventListeners(container, type);
+}
+
+/**
+ * Create HTML for a single article
+ */
+function createArticleHtml(article: ArticleData, type: 'unrated' | 'relevant'): string {
+  const readClass = article.read ? ' read' : '';
+  const readButtonHtml = article.read 
+    ? '<span class="read-status">✓ Read</span>'
+    : '<button class="read-btn" data-url="' + escapeHtml(article.url) + '">Mark as Read</button>';
+
+  const actionButtonsHtml = type === 'unrated' 
+    ? `
+      <button class="rating-btn relevant" data-url="${escapeHtml(article.url)}" data-relevant="true">
+        Relevant
+      </button>
+      <button class="rating-btn not-relevant" data-url="${escapeHtml(article.url)}" data-relevant="false">
+        Not Relevant
+      </button>
+    `
+    : `
+      <button class="rating-btn unrate" data-url="${escapeHtml(article.url)}">
+        Unrate
+      </button>
+    `;
+
+  return `
+    <div class="article${readClass}" data-url="${escapeHtml(article.url)}">
+      <div class="article-header">
+        <h3 class="article-title">${escapeHtml(article.title)}</h3>
+      </div>
+      <p class="article-summary">${escapeHtml(article.summary)}</p>
+      <div class="article-actions">
+        <div class="action-row">
+          <a href="${escapeHtml(article.url)}" target="_blank" class="read-full-link">
+            Read Full Article
+          </a>
+          ${readButtonHtml}
+        </div>
+        <div class="action-row">
+          <span class="rating-label">Rate this article:</span>
+          <div class="rating-controls">
+            ${actionButtonsHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Set up event listeners for article actions
+ */
+function setupArticleEventListeners(container: HTMLElement, type: 'unrated' | 'relevant'): void {
+  // Event delegation for better performance
+  container.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement;
+    const articleUrl = target.getAttribute('data-url');
+    
+    if (!articleUrl) return;
+    
+    try {
+      if (target.classList.contains('read-btn')) {
+        event.preventDefault();
+        await handleMarkAsRead(articleUrl, target);
+      } else if (target.classList.contains('rating-btn')) {
+        event.preventDefault();
+        
+        if (target.classList.contains('unrate')) {
+          await handleUnrateArticle(articleUrl, target);
         } else {
-          unratedListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">All articles have been rated! 🎉</p>';
-        }
-      } else {
-        unratedArticles.forEach(article => {
-          const articleElement = createArticleElement(article, 'unrated');
-          unratedListDiv.appendChild(articleElement);
-        });
-      }
-      
-      // Display relevant articles
-      if (relevantArticles.length === 0) {
-        relevantListDiv.innerHTML = '<p style="text-align: center; opacity: 0.7;">No relevant articles yet.<br>Rate articles as "Relevant" to build your curated feed!</p>';
-      } else {
-        relevantArticles.forEach(article => {
-          const articleElement = createArticleElement(article, 'relevant');
-          relevantListDiv.appendChild(articleElement);
-        });
-      }
-      
-      console.log(`Displayed ${unratedArticles.length} unrated and ${relevantArticles.length} relevant articles`);
-    }, (error: any) => {
-      console.error('Error listening to articles:', error);
-      if (unratedListDiv) {
-        unratedListDiv.innerHTML = '<p style="color: red;">Error loading articles. Check console for details.</p>';
-      }
-      if (relevantListDiv) {
-        relevantListDiv.innerHTML = '<p style="color: red;">Error loading articles. Check console for details.</p>';
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error initializing Firebase:', error);
-    if (unratedListDiv) {
-      unratedListDiv.innerHTML = `<p style="color: red;">Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
-    }
-    if (relevantListDiv) {
-      relevantListDiv.innerHTML = `<p style="color: red;">Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
-    }
-  }
-}
-
-/**
- * Helper function to format article publication date
- */
-function formatArticleDate(publishedAt: any): string {
-  try {
-    if (publishedAt && typeof publishedAt.toDate === 'function') {
-      return publishedAt.toDate().toLocaleDateString();
-    } else if (publishedAt instanceof Date) {
-      return publishedAt.toLocaleDateString();
-    } else {
-      return 'Unknown date';
-    }
-  } catch (error) {
-    console.warn('Error formatting date:', error);
-    return 'Unknown date';
-  }
-}
-
-/**
- * Create the article header with title
- */
-function createArticleHeader(article: ArticleData): HTMLElement {
-  const headerDiv = document.createElement('div');
-  headerDiv.className = 'article-header';
-  
-  const titleElement = document.createElement('h2');
-  titleElement.className = 'article-title';
-  titleElement.textContent = article.title;
-  
-  headerDiv.appendChild(titleElement);
-  return headerDiv;
-}
-
-/**
- * Create the article summary paragraph
- */
-function createArticleSummary(article: ArticleData): HTMLElement {
-  const summaryElement = document.createElement('p');
-  summaryElement.className = 'article-summary';
-  summaryElement.textContent = article.ai_summary;
-  return summaryElement;
-}
-
-/**
- * Create the read status element (button or status indicator)
- */
-function createReadStatusElement(article: ArticleData): HTMLElement {
-  if (article.is_read) {
-    const statusSpan = document.createElement('span');
-    statusSpan.className = 'read-status';
-    statusSpan.textContent = '✅ Read';
-    return statusSpan;
-  } else {
-    const readButton = document.createElement('button');
-    readButton.className = 'read-btn';
-    readButton.textContent = '📖 Mark as Read';
-    readButton.setAttribute('data-article-url', article.url);
-    
-    // Add event listener
-    readButton.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const articleElement = readButton.closest('.article') as HTMLElement;
-      if (articleElement) {
-        await markArticleAsRead(article.url, articleElement);
-      }
-    });
-    
-    return readButton;
-  }
-}
-
-/**
- * Create rating controls based on column type
- */
-function createRatingControls(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement | null {
-  if (columnType === 'unrated') {
-    const controlsDiv = document.createElement('div');
-    controlsDiv.className = 'rating-controls';
-    
-    const label = document.createElement('span');
-    label.className = 'rating-label';
-    label.textContent = 'Is this article relevant?';
-    
-    const relevantButton = document.createElement('button');
-    relevantButton.className = 'rating-btn relevant';
-    relevantButton.textContent = '✅ Relevant';
-    relevantButton.setAttribute('data-relevant', 'true');
-    relevantButton.setAttribute('data-article-url', article.url);
-    
-    const notRelevantButton = document.createElement('button');
-    notRelevantButton.className = 'rating-btn not-relevant';
-    notRelevantButton.textContent = '❌ Not Relevant';
-    notRelevantButton.setAttribute('data-relevant', 'false');
-    notRelevantButton.setAttribute('data-article-url', article.url);
-    
-    // Add event listeners
-    const handleRatingClick = async (e: Event) => {
-      e.preventDefault();
-      const target = e.target as HTMLElement;
-      const relevantValue = target.getAttribute('data-relevant');
-      if (relevantValue !== null) {
-        const isRelevant = relevantValue === 'true';
-        const articleElement = target.closest('.article') as HTMLElement;
-        if (articleElement) {
-          await rateArticle(article.url, isRelevant, articleElement);
+          const isRelevant = target.getAttribute('data-relevant') === 'true';
+          await handleRateArticle(articleUrl, isRelevant, target);
         }
       }
-    };
-    
-    relevantButton.addEventListener('click', handleRatingClick);
-    notRelevantButton.addEventListener('click', handleRatingClick);
-    
-    controlsDiv.appendChild(label);
-    controlsDiv.appendChild(relevantButton);
-    controlsDiv.appendChild(notRelevantButton);
-    
-    return controlsDiv;
-  } else if (columnType === 'relevant') {
-    const controlsDiv = document.createElement('div');
-    controlsDiv.className = 'rating-controls';
-    
-    const unrateButton = document.createElement('button');
-    unrateButton.className = 'rating-btn unrate';
-    unrateButton.textContent = '🔄 Unrate Article';
-    unrateButton.setAttribute('data-unrate', 'true');
-    unrateButton.setAttribute('data-article-url', article.url);
-    
-    // Add event listener
-    unrateButton.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const articleElement = unrateButton.closest('.article') as HTMLElement;
-      if (articleElement) {
-        await unrateArticle(article.url, articleElement);
-      }
-    });
-    
-    controlsDiv.appendChild(unrateButton);
-    return controlsDiv;
-  }
-  
-  return null;
+    } catch (error) {
+      console.error('Error handling article action:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**
- * Create the article actions section
+ * Handle marking an article as read
  */
-function createArticleActions(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement {
-  const actionsDiv = document.createElement('div');
-  actionsDiv.className = 'article-actions';
+async function handleMarkAsRead(articleUrl: string, buttonElement: HTMLElement): Promise<void> {
+  const originalText = buttonElement.textContent;
+  buttonElement.textContent = 'Marking...';
+  buttonElement.setAttribute('disabled', 'true');
   
-  // Create action row with read link and read status
-  const actionRow = document.createElement('div');
-  actionRow.className = 'action-row';
-  
-  const readLink = document.createElement('a');
-  readLink.href = article.url;
-  readLink.target = '_blank';
-  readLink.className = 'read-full-link';
-  readLink.textContent = 'Read Full Article ↗';
-  
-  const readStatusElement = createReadStatusElement(article);
-  
-  actionRow.appendChild(readLink);
-  actionRow.appendChild(readStatusElement);
-  actionsDiv.appendChild(actionRow);
-  
-  // Add rating controls if applicable
-  const ratingControls = createRatingControls(article, columnType);
-  if (ratingControls) {
-    actionsDiv.appendChild(ratingControls);
-  }
-  
-  return actionsDiv;
-}
-
-/**
- * Create the article metadata section
- */
-function createArticleMeta(article: ArticleData): HTMLElement {
-  const metaDiv = document.createElement('div');
-  metaDiv.className = 'article-meta';
-  
-  const publishedDate = formatArticleDate(article.published_at);
-  const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
-  
-  // Create individual meta spans
-  const sourceSpan = document.createElement('span');
-  sourceSpan.textContent = `Source: ${article.source_name}`;
-  
-  const separator1 = document.createTextNode(' | ');
-  
-  const dateSpan = document.createElement('span');
-  dateSpan.textContent = `Published: ${publishedDate}`;
-  
-  const separator2 = document.createTextNode(' | ');
-  
-  const scoreSpan = document.createElement('span');
-  scoreSpan.textContent = `Score: ${article.ai_score.toFixed(1)}`;
-  
-  const separator3 = document.createTextNode(' | ');
-  
-  const contentTypeSpan = document.createElement('span');
-  contentTypeSpan.textContent = `${contentTypeIcon} ${article.content_source}`;
-  
-  metaDiv.appendChild(sourceSpan);
-  metaDiv.appendChild(separator1);
-  metaDiv.appendChild(dateSpan);
-  metaDiv.appendChild(separator2);
-  metaDiv.appendChild(scoreSpan);
-  metaDiv.appendChild(separator3);
-  metaDiv.appendChild(contentTypeSpan);
-  
-  return metaDiv;
-}
-
-/**
- * Main function to create an article element using component-based approach
- */
-function createArticleElement(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement {
-  const articleElement = document.createElement('div');
-  articleElement.classList.add('article');
-  
-  // Add read class for styling if article is read
-  if (article.is_read) {
-    articleElement.classList.add('read');
-  }
-  
-  // Create and append all components
-  const header = createArticleHeader(article);
-  const summary = createArticleSummary(article);
-  const actions = createArticleActions(article, columnType);
-  const meta = createArticleMeta(article);
-  
-  articleElement.appendChild(header);
-  articleElement.appendChild(summary);
-  articleElement.appendChild(actions);
-  articleElement.appendChild(meta);
-  
-  return articleElement;
-}
-
-// escapeHtml function no longer needed with programmatic DOM creation
-
-// formatContent function removed since we no longer display scraped content in the UI
-
-async function markArticleAsRead(articleUrl: string, articleElement: HTMLElement) {
   try {
-    console.log(`Marking article as read: ${articleUrl}`);
-    
-    // Show loading state
-    const readButton = articleElement.querySelector('.read-btn') as HTMLButtonElement;
-    if (readButton) {
-      readButton.innerHTML = '<span style="color: #888;">Saving...</span>';
-      readButton.disabled = true;
-    }
-    
-    // Create article ID from URL (same method used in main workflow)
-    const crypto = (window as any).crypto;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(articleUrl);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // Get Firebase instances
-    const firebase = (window as any).firebase;
-    const db = firebase.firestore();
-    
-    // Update the article as read
-    await db.collection('articles').doc(articleId).update({
-      is_read: true
+    await db.collection('articles').doc(articleUrl).update({
+      read: true
     });
     
-    console.log(`✅ Successfully marked article as read`);
-    
-    // Update the UI immediately
-    articleElement.classList.add('read');
-    
-    // Replace button with read status
-    const actionRow = articleElement.querySelector('.action-row');
-    if (actionRow) {
-      const readStatus = actionRow.querySelector('.read-btn, .read-status');
-      if (readStatus) {
-        readStatus.outerHTML = '<span class="read-status">✅ Read</span>';
-      }
-    }
-    
+    console.log('✅ Article marked as read successfully');
   } catch (error) {
-    console.error('Error marking article as read:', error);
-    
-    // Show error and restore button
-    const readButton = articleElement.querySelector('.read-btn') as HTMLButtonElement;
-    if (readButton) {
-      readButton.innerHTML = '📖 Mark as Read';
-      readButton.disabled = false;
-    }
+    buttonElement.textContent = originalText;
+    buttonElement.removeAttribute('disabled');
+    throw error;
   }
 }
 
-async function rateArticle(articleUrl: string, isRelevant: boolean, articleElement: HTMLElement) {
+/**
+ * Handle rating an article
+ */
+async function handleRateArticle(articleUrl: string, isRelevant: boolean, buttonElement: HTMLElement): Promise<void> {
+  const originalText = buttonElement.textContent;
+  buttonElement.textContent = 'Rating...';
+  buttonElement.setAttribute('disabled', 'true');
+  
   try {
-    const relevanceText = isRelevant ? 'relevant' : 'not relevant';
-    console.log(`Rating article as ${relevanceText}: ${articleUrl}`);
-    
-    // Show loading state
-    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
-    if (ratingControls) {
-      ratingControls.innerHTML = '<span style="color: #888;">Saving rating...</span>';
-    }
-    
-    // Create article ID from URL (same method used in main workflow)
-    const crypto = (window as any).crypto;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(articleUrl);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // Get Firebase instances
-    const firebase = (window as any).firebase;
-    const db = firebase.firestore();
-    
-    // Update the article with relevance rating
-    await db.collection('articles').doc(articleId).update({
+    await db.collection('articles').doc(articleUrl).update({
       relevant: isRelevant,
-      rated_at: firebase.firestore.FieldValue.serverTimestamp()
+      rated_at: (window as any).firebase.firestore.FieldValue.serverTimestamp()
     });
-    
-    console.log(`✅ Successfully rated article as ${relevanceText}`);
     
     // Check profile threshold after rating (with delay to ensure UI update)
     setTimeout(() => {
       checkProfileThresholdInRenderer();
     }, 500);
     
-    // Show success message briefly, then remove the article
-    if (ratingControls) {
-      ratingControls.innerHTML = `<span style="color: #00aaff;">✓ Rated as ${relevanceText}</span>`;
-    }
-    
-    // Remove article from UI after brief delay
-    setTimeout(() => {
-      articleElement.style.transition = 'all 0.3s ease';
-      articleElement.style.opacity = '0';
-      articleElement.style.transform = 'translateX(-100%)';
-      
-      setTimeout(() => {
-        articleElement.remove();
-      }, 300);
-    }, 1000);
-    
+    const relevanceText = isRelevant ? 'relevant' : 'not relevant';
+    console.log(`✅ Article rated as ${relevanceText} successfully`);
   } catch (error) {
-    console.error('Error rating article:', error);
-    
-    // Show error message
-    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
-    if (ratingControls) {
-      ratingControls.innerHTML = '<span style="color: #ff6b6b;">Error saving rating. Please try again.</span>';
-      
-      // Restore buttons after error
-      setTimeout(() => {
-        location.reload(); // Simple recovery - reload the page
-      }, 2000);
-    }
+    buttonElement.textContent = originalText;
+    buttonElement.removeAttribute('disabled');
+    throw error;
   }
 }
 
 /**
- * Check profile threshold from renderer context
- * This function communicates with the main process to check if profile generation is available
+ * Handle unrating an article
  */
-async function checkProfileThresholdInRenderer() {
+async function handleUnrateArticle(articleUrl: string, buttonElement: HTMLElement): Promise<void> {
+  const originalText = buttonElement.textContent;
+  buttonElement.textContent = 'Unrating...';
+  buttonElement.setAttribute('disabled', 'true');
+  
   try {
-    // Access the window's checkProfileThreshold function that was set up in HTML
+    await db.collection('articles').doc(articleUrl).update({
+      relevant: null,
+      rated_at: (window as any).firebase.firestore.FieldValue.delete()
+    });
+    
+    console.log('✅ Article unrated successfully');
+  } catch (error) {
+    buttonElement.textContent = originalText;
+    buttonElement.removeAttribute('disabled');
+    throw error;
+  }
+}
+
+/**
+ * Show loading state
+ */
+function showLoading(type: 'unrated' | 'relevant'): void {
+  const container = type === 'unrated' ? unratedListDiv : relevantListDiv;
+  if (container) {
+    container.innerHTML = '<p style="text-align: center; padding: 20px;">Loading articles...</p>';
+  }
+}
+
+/**
+ * Show error state
+ */
+function showError(type: 'unrated' | 'relevant', message: string): void {
+  const container = type === 'unrated' ? unratedListDiv : relevantListDiv;
+  if (container) {
+    container.innerHTML = `<p style="color: red; text-align: center; padding: 20px;">Error: ${escapeHtml(message)}</p>`;
+  }
+}
+
+/**
+ * Show initialization error in the UI
+ */
+function showInitializationError(error: any): void {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  showError('unrated', errorMessage);
+  showError('relevant', errorMessage);
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Check profile threshold from renderer context
+ */
+async function checkProfileThresholdInRenderer(): Promise<void> {
+  try {
     if ((window as any).checkProfileThreshold) {
       await (window as any).checkProfileThreshold();
-    } else {
-      console.log('Renderer: checkProfileThreshold function not available');
     }
     
-    // Also check for profile existence for profile management button
     if ((window as any).checkProfileExists) {
       await (window as any).checkProfileExists();
     }
@@ -560,74 +401,17 @@ async function checkProfileThresholdInRenderer() {
   }
 }
 
-async function unrateArticle(articleUrl: string, articleElement: HTMLElement) {
-  try {
-    console.log(`Unrating article: ${articleUrl}`);
-    
-    // Show loading state
-    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
-    if (ratingControls) {
-      ratingControls.innerHTML = '<span style="color: #888;">Removing rating...</span>';
-    }
-    
-    // Create article ID from URL (same method used in main workflow)
-    const crypto = (window as any).crypto;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(articleUrl);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // Get Firebase instances
-    const firebase = (window as any).firebase;
-    const db = firebase.firestore();
-    
-    // Update the article to remove relevance rating
-    await db.collection('articles').doc(articleId).update({
-      relevant: null,
-      rated_at: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    
-    console.log(`✅ Successfully unrated article`);
-    
-    // Show success message briefly, then remove the article from this column
-    if (ratingControls) {
-      ratingControls.innerHTML = '<span style="color: #00aaff;">✓ Rating removed</span>';
-    }
-    
-    // Remove article from UI after brief delay (it will move back to unrated column)
-    setTimeout(() => {
-      articleElement.style.transition = 'all 0.3s ease';
-      articleElement.style.opacity = '0';
-      articleElement.style.transform = 'translateX(-100%)';
-      
-      setTimeout(() => {
-        articleElement.remove();
-      }, 300);
-    }, 1000);
-    
-  } catch (error) {
-    console.error('Error unrating article:', error);
-    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
-    if (ratingControls) {
-      ratingControls.innerHTML = '<span style="color: red;">Error removing rating</span>';
-      setTimeout(() => {
-        // Restore original unrate button using programmatic DOM creation
-        const unrateButton = document.createElement('button');
-        unrateButton.className = 'rating-btn unrate';
-        unrateButton.textContent = '🔄 Unrate Article';
-        unrateButton.setAttribute('data-unrate', 'true');
-        unrateButton.setAttribute('data-article-url', articleUrl);
-        
-        // Add event listener
-        unrateButton.addEventListener('click', async (e) => {
-          e.preventDefault();
-          await unrateArticle(articleUrl, articleElement);
-        });
-        
-        ratingControls.innerHTML = '';
-        ratingControls.appendChild(unrateButton);
-      }, 2000);
-    }
+/**
+ * Cleanup function for when the page is unloaded
+ */
+window.addEventListener('beforeunload', () => {
+  console.log('Renderer: Cleaning up...');
+  
+  if (unratedListener) {
+    unratedListener();
   }
-}
+  
+  if (relevantListener) {
+    relevantListener();
+  }
+});
