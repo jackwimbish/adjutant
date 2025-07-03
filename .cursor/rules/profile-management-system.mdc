@@ -1,0 +1,147 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Profile Management System - Manual Editing
+
+## Overview
+The profile management system allows users to manually edit their preferences (likes/dislikes) through a sophisticated UI with local staging, validation, and direct Firebase updates.
+
+## Architecture Components
+
+### 1. Backend IPC Handler
+- **Handler**: `learner:update-profile-manual` in [src/main.ts](mdc:src/main.ts)
+- **Purpose**: Direct Firebase profile updates without expensive AI regeneration
+- **Validation**: 5+ character minimum, 15 item maximum, no whitespace-only entries
+- **Changelog**: Always sets to "User manually adjusted likes/dislikes"
+
+### 2. Frontend Components
+- **HTML**: [src/windows/profile-management.html](mdc:src/windows/profile-management.html)
+- **JavaScript**: [src/windows/profile-management.js](mdc:src/windows/profile-management.js)
+- **Preload**: [src/windows/profile-management-preload.ts](mdc:src/windows/profile-management-preload.ts)
+
+## UI/UX Patterns
+
+### Edit Mode System
+```javascript
+// State management
+let isEditMode = false;
+let stagedChanges = { likes: [], dislikes: [] };
+let hasUnsavedChanges = false;
+
+// Mode switching
+function enterEditMode() {
+    // Show edit controls, hide normal buttons
+    // Enable add/remove functionality
+}
+
+function exitEditMode() {
+    // Hide edit controls, show normal buttons
+    // Clear staging and inputs
+}
+```
+
+### Staged Changes Pattern
+- **Local Staging**: All changes stored in `stagedChanges` object until save
+- **Unsaved Protection**: Warns user before closing with unsaved changes
+- **Visual Feedback**: Count indicators (X/15) with color warnings at limits
+
+### Input Validation
+```javascript
+function validatePreferenceInput(value) {
+    return value.length >= 5 && value.trim().length >= 5;
+}
+
+// Real-time validation with error styling
+input.addEventListener('input', () => validateInput(input));
+```
+
+## Key Features
+
+### 1. Add/Remove Preferences
+- **Add**: Text inputs with Enter key support and "Add" buttons
+- **Remove**: × buttons appear on items in edit mode
+- **Validation**: Min 5 characters, no empty/whitespace entries
+- **Limits**: Maximum 15 likes and 15 dislikes
+
+### 2. Count Indicators
+- **Display**: "5/15 likes", "3/15 dislikes" in section headers
+- **Color Coding**: Orange warning when approaching 15-item limit
+- **Real-time Updates**: Updates immediately as user adds/removes
+
+### 3. Save/Cancel System
+- **Save**: Calls `updateProfileManual` IPC handler with validation
+- **Cancel**: Restores original data, exits edit mode
+- **Loading States**: Visual feedback during save operations
+- **Error Handling**: Comprehensive error messages and recovery
+
+## Implementation Requirements
+
+### IPC Handler Validation
+```typescript
+// Input validation in main process
+if (!Array.isArray(likes) || !Array.isArray(dislikes)) {
+    return { success: false, message: 'Invalid input' };
+}
+
+if (likes.length > 15 || dislikes.length > 15) {
+    return { success: false, message: 'Maximum 15 items allowed' };
+}
+
+// Per-item validation
+const validatePreference = (pref: string): boolean => {
+    const trimmed = pref.trim();
+    return trimmed.length >= 5;
+};
+```
+
+### Firebase Update Pattern
+```typescript
+const updateData = {
+    likes: likes.map(like => like.trim()),
+    dislikes: dislikes.map(dislike => dislike.trim()),
+    changelog: 'User manually adjusted likes/dislikes',
+    last_updated: new Date()
+};
+
+await updateDoc(profileRef, updateData);
+```
+
+## CSS Styling Patterns
+
+### Edit Mode Controls
+- **Edit Controls Container**: `.edit-controls` with background and border
+- **Add Preference Form**: `.add-preference` with flex layout
+- **Input Styling**: Error states with red border and shadow
+- **Remove Buttons**: Circular × buttons positioned absolutely
+
+### Visual States
+- **Count Indicators**: Small, muted text with warning colors
+- **Edit Mode Items**: Relative positioning for remove buttons
+- **Action Buttons**: Grouped with proper spacing and loading states
+
+## Error Handling
+
+### Client-Side Validation
+- **Input Length**: Minimum 5 characters with real-time feedback
+- **Limit Enforcement**: Prevent adding beyond 15 items
+- **Visual Indicators**: Error styling on invalid inputs
+
+### Server-Side Validation
+- **Type Checking**: Ensure arrays are provided
+- **Content Validation**: Check each preference meets requirements
+- **Firebase Errors**: Proper error propagation and user feedback
+
+## Development Notes
+
+### Asset Management
+- **Build Process**: Manual copying required for HTML/JS files
+- **File Structure**: Preload handles IPC, JS handles UI logic
+- **State Synchronization**: Careful management between edit and display modes
+
+### User Experience
+- **Intuitive Flow**: Clear mode switching with visual feedback
+- **Data Safety**: Multiple layers of unsaved change protection
+- **Performance**: No AI costs for manual edits - direct Firebase updates
+- **Accessibility**: Enter key support, clear labels, proper focus management

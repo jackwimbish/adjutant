@@ -1,0 +1,271 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# AI Cost Optimization Strategies
+
+## Overview
+Cost optimization strategies for AI operations in Adjutant, featuring a two-tier model system that uses cheaper models for filtering and expensive models for detailed analysis.
+
+## Two-Tier Model Strategy
+
+### 1. Topic Relevance Filtering (Cheap)
+**Model**: GPT-4o-mini (~$0.15/1M tokens)  
+**Purpose**: Filter out irrelevant articles before expensive scoring  
+**Implementation**: [src/workflows/adaptive-scorer-workflow.ts](mdc:src/workflows/adaptive-scorer-workflow.ts)
+
+```typescript
+// Enhanced topic relevance with 4000 characters of content
+const availableContent = state.article.full_content_text || 
+                        state.article.ai_summary || 
+                        state.article.rss_excerpt || 
+                        'No content available';
+const contentPreview = availableContent.length > 4000 ? 
+                      availableContent.substring(0, 4000) + '...' : 
+                      availableContent;
+
+const topicPrompt = `Is this article relevant to the topic: "${state.topicDescription}"?
+
+Article Title: ${state.article.title}
+
+Article Content:
+${contentPreview}
+
+Instructions:
+- Consider if the article content directly relates to the specified topic
+- Ignore tangential mentions unless they are the main focus
+- Look at the main themes, techniques, tools, and subject matter discussed
+- Respond with ONLY "yes" or "no" (no additional text)
+
+Response:`;
+```
+
+### 2. Profile-Based Scoring (Expensive)
+**Model**: GPT-4o (~$2.50/1M tokens)  
+**Purpose**: Sophisticated scoring based on user preferences  
+**Trigger**: Only after passing topic relevance filter
+
+```typescript
+// Only articles that pass topic filter get expensive scoring
+if (!isRelevant) {
+    return {
+        topicRelevant: false,
+        scoredArticle: {
+            ...state.article,
+            ai_score: null,
+            ai_summary: 'Article not relevant to user topic interests',
+            topic_filtered: true,
+            topic_filtered_at: new Date()
+        }
+    };
+}
+```
+
+## Cost Impact Analysis
+
+### Before Enhancement
+- **Input**: Title + brief summary (~100 tokens)
+- **Accuracy**: Lower due to limited context
+- **False Negatives**: Many relevant articles incorrectly filtered
+
+### After Enhancement  
+- **Input**: Title + first 4000 characters (~1000 tokens)
+- **Cost per filter**: ~$0.00015 (practically free)
+- **Accuracy**: Much higher with full content context
+- **Processing 1000 articles**: ~$0.15 total
+
+### Cost Savings
+```
+Traditional approach: All articles → GPT-4o scoring
+Cost: 1000 articles × $0.0025 = $2.50
+
+Optimized approach: 
+- 1000 articles × GPT-4o-mini filter = $0.15
+- 300 relevant articles × GPT-4o scoring = $0.75
+- Total: $0.90 (64% savings)
+```
+
+## Implementation Patterns
+
+### Content Preparation
+```typescript
+// Get best available content for analysis
+function getContentForAnalysis(article: ArticleData, maxLength: number = 4000): string {
+    const sources = [
+        article.full_content_text,    // Priority 1: Full scraped content
+        article.ai_summary,           // Priority 2: AI-generated summary
+        article.rss_excerpt,          // Priority 3: RSS excerpt
+        'No content available'        // Fallback
+    ];
+    
+    const content = sources.find(source => source && source.trim().length > 0) || 'No content available';
+    
+    return content.length > maxLength ? 
+           content.substring(0, maxLength) + '...' : 
+           content;
+}
+```
+
+### Model Selection Logic
+```typescript
+// Use cheaper model for filtering
+const filterClient = new ChatOpenAI({
+    apiKey: openaiClient.apiKey,
+    model: 'gpt-4o-mini',    // Cheap filtering
+    temperature: 0.1
+});
+
+// Use expensive model for detailed analysis
+const scoringClient = new ChatOpenAI({
+    apiKey: openaiClient.apiKey,
+    model: 'gpt-4o',         // Expensive scoring
+    temperature: 0.1
+});
+```
+
+### Retry Strategy
+```typescript
+// Efficient retry with escalating delays
+const maxRetries = 2;  // Keep retries low for cheap operations
+
+for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+        const response = await filterClient.invoke([{ role: 'user', content: prompt }]);
+        // Process response...
+        break;
+    } catch (error) {
+        if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+        }
+        // Handle final failure
+    }
+}
+```
+
+## Prompt Engineering for Cost Efficiency
+
+### Topic Relevance Prompt
+**Design Goals**:
+- Clear, specific instructions
+- Binary response (yes/no) for easy parsing
+- Minimal token usage in response
+
+```typescript
+const prompt = `Is this article relevant to the topic: "${topicDescription}"?
+
+Article Title: ${title}
+Article Content: ${content}
+
+Instructions:
+- Consider if the article content directly relates to the specified topic
+- Ignore tangential mentions unless they are the main focus
+- Look at the main themes, techniques, tools, and subject matter discussed
+- Respond with ONLY "yes" or "no" (no additional text)
+
+Response:`;
+```
+
+### Response Parsing
+```typescript
+// Robust parsing for binary responses
+const responseText = (response.content as string).toLowerCase().trim();
+
+let isRelevant = false;
+if (responseText.includes('yes') && !responseText.includes('no')) {
+    isRelevant = true;
+} else if (responseText.includes('no') && !responseText.includes('yes')) {
+    isRelevant = false;
+} else {
+    // Handle ambiguous responses with retry
+    console.warn(`⚠️ Ambiguous response: "${responseText}" - retrying...`);
+}
+```
+
+## Performance Monitoring
+
+### Cost Tracking
+Log costs and model usage for monitoring:
+
+```typescript
+console.log(`✅ Topic relevance check: ${isRelevant ? 'RELEVANT' : 'NOT RELEVANT'}`);
+console.log(`💰 Cost optimization: ${isRelevant ? 'Full scoring (higher cost)' : 'Filtered out (saved cost)'}`);
+```
+
+### Effectiveness Metrics
+Track filtering effectiveness:
+
+```typescript
+// Log filtering results
+if (!isRelevant) {
+    console.log(`ℹ️ Article unscored: Article not relevant to user topic interests`);
+    return {
+        topicRelevant: false,
+        scoredArticle: {
+            ...state.article,
+            topic_filtered: true,
+            topic_filtered_at: new Date()
+        }
+    };
+}
+```
+
+## Optimization Best Practices
+
+### 1. Content Length Optimization
+- **4000 characters**: Optimal balance of context vs. cost
+- **Priority order**: Full content > Summary > Excerpt
+- **Truncation**: Clean cut-off with "..." indicator
+
+### 2. Model Selection
+- **GPT-4o-mini**: Topic filtering, simple classification tasks
+- **GPT-4o**: Complex reasoning, detailed analysis, JSON generation
+- **Temperature**: Keep low (0.1) for consistent, focused responses
+
+### 3. Prompt Design
+- **Specific instructions**: Reduce ambiguous responses
+- **Binary outputs**: Easier parsing, fewer tokens
+- **Clear context**: Better accuracy, fewer retries
+
+### 4. Error Handling
+- **Low retry counts**: For cheap operations (2 retries max)
+- **Higher retry counts**: For expensive operations (3 retries max)
+- **Graceful degradation**: Default to safe choices on failure
+
+## Future Optimization Opportunities
+
+### Content Caching
+- Cache analysis results for duplicate content
+- Store topic relevance decisions for similar articles
+- Implement content fingerprinting for deduplication
+
+### Dynamic Model Selection
+- Use article length to choose appropriate model
+- Implement confidence scoring for model selection
+- A/B test different model combinations
+
+### Batch Processing
+- Group similar articles for batch processing
+- Implement priority queues for time-sensitive content
+- Use async processing for non-critical operations
+
+## Monitoring and Alerts
+
+### Cost Alerts
+Set up monitoring for:
+- Daily AI spending limits
+- Unusual cost spikes
+- Model usage ratios (mini vs. full)
+
+### Performance Alerts
+Monitor:
+- Topic filter accuracy rates
+- Average response times
+- Error rates by model
+
+### Usage Analytics
+Track:
+- Articles filtered vs. scored
+- Cost savings per day
+- Model effectiveness metrics

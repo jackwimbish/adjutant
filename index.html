@@ -373,10 +373,10 @@
                 <button id="fetch-btn" class="fetch-btn">
                     📰 Fetch Stories
                 </button>
-                <button id="profile-btn" class="profile-btn" style="display: none;">
+                <button id="profile-btn" class="profile-btn" disabled>
                     🧠 Generate Profile
                 </button>
-                <button id="profile-management-btn" class="profile-btn" style="display: none;">
+                <button id="profile-management-btn" class="profile-btn" disabled>
                     👤 Profile
                 </button>
                 <button id="trash-btn" class="trash-btn">
@@ -533,6 +533,12 @@
                 profileBtn.addEventListener('click', async () => {
                     console.log('HTML: Generate Profile button clicked');
                     
+                    // Check if button is disabled (insufficient ratings)
+                    if (profileBtn.disabled) {
+                        console.log('HTML: Generate Profile button is disabled - ignoring click');
+                        return;
+                    }
+                    
                     if (!window.electronAPI || !window.electronAPI.generateProfile) {
                         console.error('HTML: electronAPI.generateProfile not available');
                         return;
@@ -550,9 +556,9 @@
                             console.log('HTML: Profile generated successfully');
                             profileBtn.textContent = '✅ Profile Generated';
                             
-                            // Hide button after successful generation and refresh threshold
+                            // Refresh button states after successful generation
                             setTimeout(() => {
-                                profileBtn.style.display = 'none';
+                                profileBtn.textContent = originalText;
                                 checkProfileThreshold();
                             }, 2000);
                         } else {
@@ -565,7 +571,7 @@
                             // Reset button after showing error
                             setTimeout(() => {
                                 profileBtn.textContent = originalText;
-                                profileBtn.disabled = false;
+                                checkProfileThreshold();
                             }, 3000);
                         }
                     } catch (error) {
@@ -575,7 +581,7 @@
                         // Reset button after showing error
                         setTimeout(() => {
                             profileBtn.textContent = originalText;
-                            profileBtn.disabled = false;
+                            checkProfileThreshold();
                         }, 3000);
                     }
                 });
@@ -596,13 +602,13 @@
                 
                 if (profileBtn) {
                     if (result.thresholdMet) {
-                        console.log('HTML: Threshold met - showing Generate Profile button');
-                        profileBtn.style.display = 'flex';
+                        console.log('HTML: Threshold met - enabling Generate Profile button');
+                        profileBtn.disabled = false;
                         profileBtn.title = result.message;
                     } else {
                         console.log('HTML: Threshold not met:', result.message);
-                        profileBtn.style.display = 'none';
-                        profileBtn.title = result.message;
+                        profileBtn.disabled = true;
+                        profileBtn.title = `Disabled: ${result.message}`;
                     }
                 }
                 
@@ -628,13 +634,13 @@
                 
                 if (profileManagementBtn) {
                     if (result.success && result.profile) {
-                        console.log('HTML: Profile exists - showing Profile Management button');
-                        profileManagementBtn.style.display = 'flex';
+                        console.log('HTML: Profile exists - enabling Profile Management button');
+                        profileManagementBtn.disabled = false;
                         profileManagementBtn.title = 'View and manage your profile';
                     } else {
-                        console.log('HTML: No profile found - hiding Profile Management button');
-                        profileManagementBtn.style.display = 'none';
-                        profileManagementBtn.title = 'No profile available';
+                        console.log('HTML: No profile found - disabling Profile Management button');
+                        profileManagementBtn.disabled = true;
+                        profileManagementBtn.title = 'Disabled: No profile available';
                     }
                 }
             } catch (error) {
@@ -648,6 +654,13 @@
             if (profileManagementBtn) {
                 profileManagementBtn.addEventListener('click', () => {
                     console.log('HTML: Profile Management button clicked');
+                    
+                    // Check if button is disabled (no profile available)
+                    if (profileManagementBtn.disabled) {
+                        console.log('HTML: Profile Management button is disabled - ignoring click');
+                        return;
+                    }
+                    
                     if (window.electronAPI && window.electronAPI.openProfileManagement) {
                         window.electronAPI.openProfileManagement();
                     } else {

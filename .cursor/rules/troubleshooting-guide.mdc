@@ -1,0 +1,377 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Troubleshooting Guide
+
+## Overview
+Common issues encountered in Adjutant development and their solutions, based on real debugging sessions.
+
+## Profile Management Issues
+
+### Profile Window Stuck on "Loading Profile"
+
+**Symptoms**: 
+- Profile Management window shows "Loading Profile" indefinitely
+- No controls respond, including close button
+- Profile exists in Firebase but won't load
+
+**Root Cause**: JavaScript file not properly loaded in HTML
+
+**Solution**:
+1. Check [src/windows/profile-management.html](mdc:src/windows/profile-management.html) for proper script inclusion:
+   ```html
+   <!-- ❌ Wrong - placeholder comment -->
+   <script>
+       // Profile management functionality will be loaded here
+   </script>
+   
+   <!-- ✅ Correct - actual file inclusion -->
+   <script src="profile-management.js"></script>
+   ```
+
+2. Ensure assets are copied after build:
+   ```bash
+   npm run build
+   cp src/windows/profile-management.html dist/windows/
+   cp src/windows/profile-management.js dist/windows/
+   ```
+
+**Prevention**: Always verify script tags reference actual files, not placeholder comments.
+
+### Profile Dates Show "Unknown"
+
+**Symptoms**:
+- Created date shows "Unknown" 
+- Last updated shows "Unknown"
+- Firebase console shows valid timestamp data
+
+**Root Cause**: Firebase timestamps not properly parsed
+
+**Solution**: Enhanced `formatDate` function in [src/windows/profile-management.js](mdc:src/windows/profile-management.js):
+
+```javascript
+function formatDate(dateInput) {
+    try {
+        let date;
+        
+        if (dateInput && typeof dateInput.toDate === 'function') {
+            // Firestore Timestamp object with toDate method
+            date = dateInput.toDate();
+        } else if (dateInput && typeof dateInput === 'object' && dateInput.seconds) {
+            // Firebase Timestamp object with seconds and nanoseconds
+            date = new Date(dateInput.seconds * 1000 + (dateInput.nanoseconds || 0) / 1000000);
+        } else if (dateInput instanceof Date) {
+            date = dateInput;
+        } else if (typeof dateInput === 'string' || typeof dateInput === 'number') {
+            date = new Date(dateInput);
+        } else {
+            console.warn('Unknown date format:', dateInput);
+            return 'Unknown';
+        }
+        
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (error) {
+        console.warn('Error formatting date:', error, dateInput);
+        return 'Unknown';
+    }
+}
+```
+
+**Debug Steps**:
+1. Check browser console for date parsing errors
+2. Verify Firebase timestamp structure in console logs
+3. Test with different timestamp formats
+
+## Firebase Integration Issues
+
+### "Unsupported field value: undefined" Error
+
+**Symptoms**:
+- Firebase save operations fail
+- Error message mentions `undefined` field value
+- Articles process successfully but fail to save
+
+**Root Cause**: Firebase rejects documents with `undefined` fields
+
+**Solution**: Prevent undefined values in [src/workflow.ts](mdc:src/workflow.ts):
+
+```typescript
+// ❌ Wrong - sets undefined
+topic_filtered_at: undefined
+
+// ✅ Correct - omit undefined fields
+// topic_filtered_at omitted if undefined
+
+// ✅ Correct - conditional spread
+...(scoredArticle.topic_filtered_at && { topic_filtered_at: scoredArticle.topic_filtered_at })
+
+// ✅ Correct - conditional assignment
+if (analysis.topic_filtered_at) {
+    (articleData as any).topic_filtered_at = analysis.topic_filtered_at;
+}
+```
+
+**Prevention**: Always check for undefined values before Firebase operations.
+
+### Firebase App Instance Conflicts
+
+**Symptoms**:
+- Error: "Firebase App 'name' already exists"
+- Multiple operations interfere with each other
+- Inconsistent Firebase behavior
+
+**Solution**: Use unique app instance names:
+
+```typescript
+// ✅ Unique names prevent conflicts
+const appName = `operation-${Date.now()}`;
+const app = initializeApp(userConfig.firebase, appName);
+```
+
+**Examples**:
+- Profile operations: `profile-load-${Date.now()}`
+- Workflow operations: `workflow-${Date.now()}`
+- Delete operations: `profile-delete-app`
+
+## Build and Development Issues
+
+### Window Files Not Found
+
+**Symptoms**:
+- "ERR_FILE_NOT_FOUND" when opening windows
+- Window opens but shows blank or error page
+- Functions not defined in window context
+
+**Root Cause**: TypeScript compilation doesn't copy HTML/JS files
+
+**Solution**: Manual asset copying required:
+
+```bash
+# Complete build process
+npm run build
+
+# Copy all window assets
+cp src/windows/settings.html dist/windows/
+cp src/windows/settings.js dist/windows/
+cp src/windows/topic-settings.html dist/windows/
+cp src/windows/topic-settings.js dist/windows/
+cp src/windows/trash.html dist/windows/
+cp src/windows/trash.js dist/windows/
+cp src/windows/profile-management.html dist/windows/
+cp src/windows/profile-management.js dist/windows/
+
+# Start application
+npm start
+```
+
+**Prevention**: Always copy window assets after TypeScript compilation.
+
+### IPC Handler Not Found
+
+**Symptoms**:
+- "No handler registered for 'handler-name'"
+- IPC calls fail silently
+- Features don't work in renderer process
+
+**Root Cause**: Handler not registered in main process
+
+**Solution**: Check [src/main.ts](mdc:src/main.ts) handler registration:
+
+```typescript
+// Ensure handler is added to appropriate setup function
+function setupLearnerHandlers() {
+    // ... existing handlers ...
+    
+    ipcMain.handle('learner:update-profile-manual', async (event, likes, dislikes) => {
+        // Handler implementation
+    });
+}
+```
+
+**Debug Steps**:
+1. Check if handler is defined in main.ts
+2. Verify handler is called in `setupIpcHandlers()`
+3. Confirm preload exposes the handler
+4. Test with simple handler first
+
+## UI/UX Issues
+
+### Controls Not Responding
+
+**Symptoms**:
+- Buttons don't respond to clicks
+- Form inputs don't work
+- No JavaScript errors in console
+
+**Root Cause**: Event listeners not properly attached
+
+**Solution**: Check event listener setup:
+
+```javascript
+// Ensure event listeners are attached after DOM loads
+document.addEventListener('DOMContentLoaded', () => {
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    // Attach all event listeners here
+    document.getElementById('my-button').addEventListener('click', handleClick);
+}
+```
+
+**Debug Steps**:
+1. Check browser console for JavaScript errors
+2. Verify DOM elements exist when listeners are attached
+3. Test with simple console.log in event handlers
+4. Confirm script files are properly loaded
+
+### Window Won't Close
+
+**Symptoms**:
+- Close button doesn't work
+- Window stays open despite close attempts
+- No error messages
+
+**Root Cause**: Missing or broken close handler
+
+**Solution**: Implement proper close handling:
+
+```javascript
+// In window JavaScript
+function handleClose() {
+    // Check for unsaved changes
+    if (hasUnsavedChanges) {
+        const confirmed = confirm('Are you sure you want to close without saving?');
+        if (!confirmed) return;
+    }
+    
+    // Close via IPC
+    if (window.electronAPI && window.electronAPI.closeWindow) {
+        window.electronAPI.closeWindow();
+    } else {
+        window.close();
+    }
+}
+```
+
+## Debugging Best Practices
+
+### Enable Comprehensive Logging
+
+Add detailed logging to track issues:
+
+```typescript
+// In main process
+console.log('📄 Attempting to load profile document...');
+console.log('📊 Profile data structure:', JSON.stringify(profile.data(), null, 2));
+
+// In renderer process
+console.log('Profile loaded successfully:', profile);
+console.error('Error loading profile:', error);
+```
+
+### Use Browser Developer Tools
+
+1. **Console**: Check for JavaScript errors and warnings
+2. **Network**: Verify API calls and responses
+3. **Application**: Check localStorage/sessionStorage
+4. **Sources**: Set breakpoints and step through code
+
+### Firebase Console Verification
+
+1. **Check document structure** in Firebase console
+2. **Verify field names** match code expectations
+3. **Test queries** directly in Firebase console
+4. **Monitor real-time updates** during development
+
+### Test Systematic Approach
+
+1. **Isolate the issue**: Test minimal reproducing case
+2. **Check prerequisites**: Verify configuration, dependencies
+3. **Validate inputs**: Ensure data matches expected format
+4. **Step through flow**: Follow execution path with logs
+5. **Verify fixes**: Test both success and failure cases
+
+## Common Anti-Patterns to Avoid
+
+### ❌ Don't Do These
+
+```typescript
+// ❌ Setting undefined values
+articleData.field = undefined;
+
+// ❌ Not copying window assets
+npm run build && npm start  // Missing asset copy
+
+// ❌ Missing error handling
+await someAsyncOperation();  // No try/catch
+
+// ❌ Using same Firebase app names
+const app = initializeApp(config, 'my-app');  // Used multiple times
+
+// ❌ Not validating inputs
+const result = await ipcRenderer.invoke('handler', data);  // No validation
+```
+
+### ✅ Do These Instead
+
+```typescript
+// ✅ Only set defined values
+if (value !== undefined) {
+    articleData.field = value;
+}
+
+// ✅ Complete build process
+npm run build && cp src/windows/*.html dist/windows/ && cp src/windows/*.js dist/windows/ && npm start
+
+// ✅ Comprehensive error handling
+try {
+    await someAsyncOperation();
+} catch (error) {
+    console.error('Operation failed:', error);
+    // Handle error appropriately
+}
+
+// ✅ Unique Firebase app names
+const app = initializeApp(config, `operation-${Date.now()}`);
+
+// ✅ Validate inputs
+if (!data || typeof data !== 'object') {
+    throw new Error('Invalid input data');
+}
+```
+
+## Emergency Debugging
+
+### When Everything Breaks
+
+1. **Check the terminal** for build errors
+2. **Clear dist directory** and rebuild completely
+3. **Verify configuration** files are valid
+4. **Test with minimal changes** - revert recent changes
+5. **Check Firebase console** for data integrity
+6. **Restart the application** to clear any state issues
+
+### Recovery Steps
+
+```bash
+# Nuclear option - complete rebuild
+rm -rf dist/
+rm -rf node_modules/
+npm install
+npm run build
+# Copy all window assets
+cp src/windows/*.html dist/windows/
+cp src/windows/*.js dist/windows/
+npm start
+```
+
+This approach often resolves mysterious issues caused by stale builds or missing dependencies.
