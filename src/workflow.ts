@@ -7,6 +7,7 @@ import { type AnalysisResult, type RSSItem, type ArticleData } from './types';
 import { initializeFirebaseApp, initializeFirestore } from './services/firebase';
 import { withRetry } from './utils/retry';
 import { analyzeArticleWithWorkflow, getWorkflowStatus } from './workflows/analysis-workflow';
+import { runAdaptiveScorerWorkflow, checkProfileExists } from './workflows/adaptive-scorer-workflow';
 import { loadUserConfig, isConfigValid } from './config/user-config';
 
 console.log('Workflow script started...');
@@ -54,12 +55,106 @@ async function fetchArticlesFromSource(source: NewsSource): Promise<RSSItem[]> {
   }
 }
 
-// 3. --- AI ANALYSIS (Now handled by LangGraph-style workflow) ---
-// The analyzeArticleWithWorkflow function provides:
-// - Multi-step preprocessing, analysis, and quality validation
-// - Automatic retry logic with improved prompts
-// - Better error handling and logging
-// - Foundation for future adaptive learning features
+// 3. --- AI ANALYSIS & ADAPTIVE SCORING ---
+// The system now supports two modes:
+// 1. Legacy Analysis: Uses the original analysis workflow for content processing
+// 2. Adaptive Scoring: Uses profile-based scoring when a user profile exists
+// 
+// The adaptive scorer provides:
+// - Profile-based relevance scoring (1-10)
+// - Cost-optimized topic filtering with gpt-4o-mini
+// - Smart caching to avoid re-processing filtered articles
+// - Graceful fallback to unscored articles when no profile exists
+
+/**
+ * Enhanced article analysis that integrates adaptive scoring
+ * @param article - The RSS article to analyze
+ * @param source - The news source configuration
+ * @param userConfig - User configuration including API keys and topic description
+ * @returns ArticleData with either traditional analysis or adaptive scoring
+ */
+async function analyzeArticleWithAdaptiveScoring(
+  article: RSSItem, 
+  source: NewsSource, 
+  userConfig: any
+): Promise<any> {
+  console.log(`🔍 Starting enhanced analysis for: ${article.title}`);
+  
+  // First, run the traditional analysis workflow for content processing and scraping
+  console.log('📄 Running content analysis and scraping...');
+  const analysisResult = await analyzeArticleWithWorkflow(article, source, userConfig);
+  
+  if (!analysisResult || !analysisResult.analysis_result) {
+    console.log('❌ Content analysis failed, skipping adaptive scoring');
+    return analysisResult;
+  }
+  
+  // Check if user has a profile for adaptive scoring
+  console.log('👤 Checking for user profile...');
+  const hasProfile = await checkProfileExists(userConfig);
+  
+  if (!hasProfile) {
+    console.log('ℹ️ No user profile found - using traditional scoring');
+    return analysisResult;
+  }
+  
+  // Create preliminary article data for adaptive scoring
+  const preliminaryArticleData: ArticleData = {
+    url: article.link!,
+    title: article.title!,
+    author: article.creator || 'N/A',
+    rss_excerpt: analysisResult.rss_excerpt || '',
+    full_content_text: analysisResult.full_content_text || '',
+    source_name: source.name,
+    published_at: article.isoDate ? new Date(article.isoDate) : new Date(),
+    fetched_at: new Date(),
+    ai_summary: analysisResult.analysis_result.ai_summary || 'No summary provided',
+    ai_score: analysisResult.analysis_result.ai_score || 1,
+    ai_category: analysisResult.analysis_result.category || 'Unknown',
+    is_read: false,
+    is_hidden: false,
+    is_favorite: false,
+    relevant: null,
+    content_source: analysisResult.content_source || 'rss',
+    scraping_status: analysisResult.scraping_status || 'failed',
+    scraping_error: analysisResult.scraping_error || null,
+    content_length: analysisResult.content_length || 0,
+    // Initialize topic filtering fields
+    topic_filtered: false,
+    topic_filtered_at: undefined
+  };
+  
+  // Run adaptive scoring workflow
+  console.log('🎯 Running adaptive scoring workflow...');
+  try {
+    const scoredArticle = await runAdaptiveScorerWorkflow(
+      preliminaryArticleData,
+      userConfig.appSettings.topicDescription,
+      userConfig
+    );
+    
+    // Update the analysis result with adaptive scoring
+    const enhancedResult = {
+      ...analysisResult,
+      analysis_result: {
+        ...analysisResult.analysis_result,
+        ai_score: scoredArticle.ai_score,
+        ai_summary: scoredArticle.ai_summary,
+        category: scoredArticle.ai_category
+      },
+      // Add topic filtering information
+      topic_filtered: scoredArticle.topic_filtered || false,
+      topic_filtered_at: scoredArticle.topic_filtered_at
+    };
+    
+    console.log(`✅ Adaptive scoring completed: ${scoredArticle.ai_score ? `${scoredArticle.ai_score}/10` : 'unscored'}`);
+    return enhancedResult;
+    
+  } catch (error) {
+    console.error('❌ Adaptive scoring failed, using traditional analysis:', error);
+    return analysisResult;
+  }
+}
 
 // 4. --- MAIN PROCESSING LOOP ---
 
@@ -160,19 +255,29 @@ async function shouldSkipArticle(article: RSSItem): Promise<boolean> {
 async function processArticle(article: RSSItem, source: NewsSource) {
   const articleId = createIdFromUrl(article.link!);
   
-  // Check if article already exists to avoid re-processing
-  if (await articleExists(articleId)) {
-    console.log(`Article already exists, skipping: ${article.title}`);
-    return;
+  // Phase 3.3: Topic filtering optimization - Check if article already exists and was topic-filtered
+  const existingDoc = await withRetry(async () => {
+    const docSnap = await getDoc(doc(articlesCollection, articleId));
+    return docSnap.exists() ? docSnap.data() : null;
+  });
+  
+  if (existingDoc) {
+    if (existingDoc.topic_filtered) {
+      console.log(`Article already topic-filtered, skipping: ${article.title}`);
+      return;
+    } else {
+      console.log(`Article already exists, skipping: ${article.title}`);
+      return;
+    }
   }
   
   console.log(`🔄 Processing article: ${article.title}`);
 
-  // Use the new LangGraph-style workflow for analysis, passing user config
-  const analysis = await analyzeArticleWithWorkflow(article, source, userConfig!);
+  // Use the enhanced analysis with adaptive scoring integration
+  const analysis = await analyzeArticleWithAdaptiveScoring(article, source, userConfig!);
 
   if (analysis && analysis.analysis_result) {
-    // The workflow has completed with both analysis and scraping data
+    // The enhanced workflow has completed with analysis, scraping, and optional adaptive scoring
     const scrapingData = {
       rss_excerpt: analysis.rss_excerpt || '',
       full_content_text: analysis.full_content_text || '',
@@ -184,6 +289,12 @@ async function processArticle(article: RSSItem, source: NewsSource) {
     
     const articleData = createArticleData(article, analysis.analysis_result, source, scrapingData);
     
+    // Add topic filtering fields if they exist
+    if (analysis.topic_filtered !== undefined) {
+      (articleData as any).topic_filtered = analysis.topic_filtered;
+      (articleData as any).topic_filtered_at = analysis.topic_filtered_at;
+    }
+    
     // Save the structured data to Firestore with retry logic
     const saveResult = await withRetry(async () => {
       await setDoc(doc(articlesCollection, articleId), articleData);
@@ -191,12 +302,15 @@ async function processArticle(article: RSSItem, source: NewsSource) {
     });
     
     if (saveResult) {
-      console.log(`✅ Successfully saved article: ${article.title} (${scrapingData.content_source} content, ${scrapingData.content_length} chars)`);
+      const scoringInfo = analysis.topic_filtered 
+        ? 'topic-filtered' 
+        : (articleData.ai_score ? `scored ${articleData.ai_score}/10` : 'traditional analysis');
+      console.log(`✅ Successfully saved article: ${article.title} (${scrapingData.content_source} content, ${scrapingData.content_length} chars, ${scoringInfo})`);
     } else {
       console.error(`❌ Failed to save article after retries: ${article.title}`);
     }
   } else {
-    console.log(`⏭️  Skipped article after workflow analysis: ${article.title}`);
+    console.log(`⏭️  Skipped article after enhanced analysis: ${article.title}`);
   }
 }
 

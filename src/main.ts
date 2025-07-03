@@ -96,6 +96,9 @@ function setupIpcHandlers(): void {
   // Window Management Handlers
   setupWindowHandlers();
   
+  // Learner Workflow Handlers
+  setupLearnerHandlers();
+  
   // Backward Compatibility Handlers
   setupLegacyHandlers();
 }
@@ -263,6 +266,170 @@ function setupWindowHandlers(): void {
 
   ipcMain.on('open-trash', () => {
     openWindow('trash');
+  });
+}
+
+/**
+ * Handlers for learner workflow operations (profile generation and threshold checking)
+ */
+function setupLearnerHandlers(): void {
+  ipcMain.handle('learner:generate-profile', async () => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot generate profile - no user configuration');
+        return { success: false, message: 'No user configuration available' };
+      }
+      
+      console.log('🧠 Starting learner workflow for profile generation...');
+      
+      // Import and run the learner workflow
+      const { runLearnerWorkflow } = await import('./workflows/learner-workflow');
+      const result = await runLearnerWorkflow(userConfig);
+      
+      // Check if profile was successfully generated
+      if ((result as any).generatedProfile) {
+        const profile = (result as any).generatedProfile;
+        console.log('✅ Profile generated successfully');
+        return { 
+          success: true, 
+          message: 'Profile generated successfully',
+          profile: {
+            likesCount: profile.likes.length,
+            dislikesCount: profile.dislikes.length,
+            lastUpdated: profile.last_updated
+          }
+        };
+      } else if ((result as any).validationPassed === false) {
+        console.log('❌ Profile generation failed - insufficient training data');
+        return { 
+          success: false, 
+          message: 'Need at least 2 relevant and 2 not relevant ratings to generate profile'
+        };
+      } else {
+        console.log('❌ Profile generation failed after retries');
+        return { 
+          success: false, 
+          message: 'Profile generation failed after multiple attempts'
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in learner workflow:', error);
+      return { 
+        success: false, 
+        message: `Profile generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  });
+
+  ipcMain.handle('learner:check-threshold', async () => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot check threshold - no user configuration');
+        return { 
+          thresholdMet: false, 
+          message: 'No user configuration available',
+          relevantCount: 0,
+          notRelevantCount: 0
+        };
+      }
+      
+      console.log('📊 Checking learner threshold...');
+      
+      // Import Firebase modules
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, collection, query, where, getDocs } = await import('firebase/firestore');
+      
+      // Initialize Firebase app for threshold checking
+      const app = initializeApp(userConfig.firebase, 'threshold-check-app');
+      const db = getFirestore(app);
+      
+      // Query for relevant and not relevant articles
+      const articlesRef = collection(db, 'articles');
+      const relevantQuery = query(articlesRef, where('relevant', '==', true));
+      const notRelevantQuery = query(articlesRef, where('relevant', '==', false));
+      
+      const [relevantSnap, notRelevantSnap] = await Promise.all([
+        getDocs(relevantQuery),
+        getDocs(notRelevantQuery)
+      ]);
+      
+      const relevantCount = relevantSnap.size;
+      const notRelevantCount = notRelevantSnap.size;
+      const thresholdMet = relevantCount >= 2 && notRelevantCount >= 2;
+      
+      console.log(`📊 Threshold check: ${relevantCount} relevant, ${notRelevantCount} not relevant`);
+      
+      return {
+        thresholdMet,
+        relevantCount,
+        notRelevantCount,
+        message: thresholdMet 
+          ? 'Ready to generate profile' 
+          : `Need ${Math.max(0, 2 - relevantCount)} more relevant and ${Math.max(0, 2 - notRelevantCount)} more not relevant ratings`
+      };
+      
+    } catch (error) {
+      console.error('❌ Error checking threshold:', error);
+      return { 
+        thresholdMet: false, 
+        message: `Error checking rating threshold: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        relevantCount: 0,
+        notRelevantCount: 0
+      };
+    }
+  });
+
+  ipcMain.handle('learner:get-profile', async () => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot get profile - no user configuration');
+        return { success: false, message: 'No user configuration available' };
+      }
+      
+      console.log('👤 Loading user profile...');
+      
+      // Import Firebase modules
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, doc, getDoc } = await import('firebase/firestore');
+      
+      // Initialize Firebase app for profile loading
+      const app = initializeApp(userConfig.firebase, 'profile-load-app');
+      const db = getFirestore(app);
+      
+      // Load profile document
+      const profileRef = doc(db, 'profiles', 'user-profile');
+      const profileDoc = await getDoc(profileRef);
+      
+      if (profileDoc.exists()) {
+        const profile = profileDoc.data();
+        console.log(`✅ Profile loaded: ${profile.likes?.length || 0} likes, ${profile.dislikes?.length || 0} dislikes`);
+        
+        return {
+          success: true,
+          profile: {
+            likes: profile.likes || [],
+            dislikes: profile.dislikes || [],
+            changelog: profile.changelog || '',
+            lastUpdated: profile.last_updated,
+            createdAt: profile.created_at
+          }
+        };
+      } else {
+        console.log('ℹ️ No profile found');
+        return {
+          success: false,
+          message: 'No profile found'
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading profile:', error);
+      return {
+        success: false,
+        message: `Error loading profile: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
   });
 }
 
