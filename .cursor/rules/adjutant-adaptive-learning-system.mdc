@@ -57,9 +57,10 @@ interface UserProfile {
 - **Functionality**: Triggers learner workflow via `learner:generate-profile` IPC
 
 ### Profile Management Window
-- **Files**: [src/windows/profile-management.html](mdc:src/windows/profile-management.html), [src/windows/profile-management.js](mdc:src/windows/profile-management.js)
+- **Files**: [src/windows/profile-management.html](mdc:src/windows/profile-management.html), [src/windows/profile-management.ts](mdc:src/windows/profile-management.ts)
 - **Access**: Cmd+P shortcut or "Profile Management..." menu item
 - **Features**: Statistics, preferences display, export, delete, regenerate
+- **TypeScript**: Comprehensive interfaces for type safety and error prevention
 
 ### Profile Button
 - **Location**: Main window header
@@ -84,7 +85,7 @@ Firebase uses snake_case (`last_updated`, `created_at`) but UI expects same form
 ```bash
 npm run build
 cp src/windows/profile-management.html dist/windows/
-cp src/windows/profile-management.js dist/windows/
+# Note: profile-management.js is compiled from TypeScript automatically
 npm start
 ```
 

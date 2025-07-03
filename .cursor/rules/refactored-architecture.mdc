@@ -118,18 +118,18 @@ function getConfigPath(): string {
 ```
 
 ## UI Helper Functions Pattern
-Settings windows use helper functions to eliminate code duplication in [src/windows/settings.js](mdc:src/windows/settings.js):
+Settings windows use helper functions to eliminate code duplication in [src/windows/settings.ts](mdc:src/windows/settings.ts):
 
 ### Helper Functions
-- `setButtonLoading(button, isLoading)` - Manages button loading states
-- `showStatus(message, isError)` - Displays status messages
-- `withApiCall(button, apiFunction)` - Wraps async operations with error handling
+- `setButtonLoading(button, isLoading)` - Manages button loading states with proper typing
+- `showStatus(message, isError)` - Displays status messages with type safety
+- `withApiCall(button, apiFunction)` - Wraps async operations with error handling and TypeScript types
 
 ### Usage Pattern
-```javascript
-async function handleTestFirebase() {
+```typescript
+async function handleTestFirebase(): Promise<void> {
   await withApiCall(testFirebaseBtn, async () => {
-    const result = await window.electronAPI.testFirebase(getFirebaseConfig());
+    const result = await (window as any).electronAPI.testFirebase(getFirebaseConfig());
     showStatus(result.message, !result.success);
   });
 }
@@ -138,8 +138,8 @@ async function handleTestFirebase() {
 ## Firebase Integration Pattern
 Each window that uses Firebase creates its own app instance to prevent conflicts:
 
-### Trash Window Example
-```javascript
+### Trash Window Example (TypeScript)
+```typescript
 // Initialize Firebase app with unique name for trash window
 const app = firebase.initializeApp(config, 'trash-app');
 
@@ -149,6 +149,13 @@ const db = firebase.firestore(app);
 // Later, when accessing Firebase in the same window
 const app = firebase.app('trash-app');
 const db = firebase.firestore(app);
+
+// TypeScript interfaces for type safety
+interface ArticleData {
+  relevant: boolean | null;
+  rated_at?: Date;
+  // ... other fields with proper typing
+}
 ```
 
 ## Article Rating System Architecture
@@ -170,19 +177,19 @@ interface ArticleData {
 4. **Trash Management**: View and unrate not relevant articles
 
 ## Development Workflow
-After refactoring, the development workflow requires:
+After TypeScript migration, the development workflow requires:
 
-1. **TypeScript Compilation**: `npm run build`
-2. **Manual Asset Copying**: 
+1. **TypeScript Compilation**: `npm run build` (compiles all `.ts` files to `.js`)
+2. **Manual HTML Asset Copying**: 
    ```bash
    cp src/windows/settings.html dist/windows/
-   cp src/windows/settings.js dist/windows/
    cp src/windows/topic-settings.html dist/windows/
-   cp src/windows/topic-settings.js dist/windows/
    cp src/windows/trash.html dist/windows/
-   cp src/windows/trash.js dist/windows/
+   cp src/windows/profile-management.html dist/windows/
    ```
 3. **Application Start**: `npm start`
+
+**Note**: TypeScript files are automatically compiled to JavaScript during the build step. Only HTML files require manual copying.
 
 ## Menu Integration Pattern
 Application menu items follow a consistent pattern:

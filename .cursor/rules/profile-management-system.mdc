@@ -18,7 +18,7 @@ The profile management system allows users to manually edit their preferences (l
 
 ### 2. Frontend Components
 - **HTML**: [src/windows/profile-management.html](mdc:src/windows/profile-management.html)
-- **JavaScript**: [src/windows/profile-management.js](mdc:src/windows/profile-management.js)
+- **TypeScript**: [src/windows/profile-management.ts](mdc:src/windows/profile-management.ts) - Comprehensive type safety and interfaces
 - **Preload**: [src/windows/profile-management-preload.ts](mdc:src/windows/profile-management-preload.ts)
 
 ## UI/UX Patterns

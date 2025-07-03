@@ -14,7 +14,7 @@ Critical patterns for Firebase integration in Adjutant, including timestamp hand
 
 **Problem**: Firebase timestamps come as objects with `seconds` and `nanoseconds`, not as JavaScript Date objects.
 
-**Solution**: Enhanced date parsing in [src/windows/profile-management.js](mdc:src/windows/profile-management.js):
+**Solution**: Enhanced date parsing in [src/windows/profile-management.ts](mdc:src/windows/profile-management.ts):
 
 ```javascript
 function formatDate(dateInput) {

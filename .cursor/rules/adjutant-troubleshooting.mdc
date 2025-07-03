@@ -46,20 +46,16 @@ alwaysApply: false
 
 ### Window Management Issues
 
-#### Window Not Loading HTML/JS Files
+#### Window Not Loading HTML Files
 **Symptoms**: "ERR_FILE_NOT_FOUND" errors
-**Root Cause**: Missing asset copying step
+**Root Cause**: Missing HTML asset copying step
 **Solution**:
 ```bash
-# Copy all window assets after build
+# Copy window HTML files after build (JS files compiled automatically from TypeScript)
 cp src/windows/settings.html dist/windows/
-cp src/windows/settings.js dist/windows/
 cp src/windows/profile-management.html dist/windows/
-cp src/windows/profile-management.js dist/windows/
 cp src/windows/topic-settings.html dist/windows/
-cp src/windows/topic-settings.js dist/windows/
 cp src/windows/trash.html dist/windows/
-cp src/windows/trash.js dist/windows/
 ```
 
 #### IPC Handler Not Found

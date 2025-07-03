@@ -12,7 +12,7 @@ The trash management system provides users with a dedicated interface to review 
 
 ### Window Components
 - **HTML**: [src/windows/trash.html](mdc:src/windows/trash.html) - Modern UI with scrollable article list
-- **JavaScript**: [src/windows/trash.js](mdc:src/windows/trash.js) - Firebase integration and article management
+- **TypeScript**: [src/windows/trash.ts](mdc:src/windows/trash.ts) - Firebase integration and article management with type safety
 - **Preload**: [src/windows/trash-preload.ts](mdc:src/windows/trash-preload.ts) - Secure IPC communication bridge
 
 ### Window Configuration
@@ -193,7 +193,7 @@ The trash window requires manual asset copying during development:
 
 ```bash
 cp src/windows/trash.html dist/windows/
-cp src/windows/trash.js dist/windows/
+# Note: trash.js is compiled from TypeScript automatically
 ```
 
 ### Testing Checklist
