@@ -9,6 +9,8 @@ import { withRetry } from './utils/retry';
 import { analyzeArticleWithWorkflow, getWorkflowStatus } from './workflows/analysis-workflow';
 import { runAdaptiveScorerWorkflow, checkProfileExists } from './workflows/adaptive-scorer-workflow';
 import { loadUserConfig, isConfigValid } from './config/user-config';
+import { ChatOpenAI } from '@langchain/openai';
+import { scrapeArticleContent, isScrapeable, stripHtmlTags } from './utils/content-scraper';
 
 console.log('Workflow script started...');
 
@@ -67,6 +69,178 @@ async function fetchArticlesFromSource(source: NewsSource): Promise<RSSItem[]> {
 // - Graceful fallback to unscored articles when no profile exists
 
 /**
+ * Topic-only article analysis for users without profiles
+ * @param article - The RSS article to analyze
+ * @param source - The news source configuration
+ * @param userConfig - User configuration including API keys and topic description
+ * @returns ArticleData with topic filtering and basic summarization
+ */
+async function analyzeArticleWithTopicOnly(
+  article: RSSItem, 
+  source: NewsSource, 
+  userConfig: any
+): Promise<any> {
+  console.log(`🔍 Starting topic-only analysis for: ${article.title}`);
+  
+  // First, do content scraping (reuse existing logic)
+  console.log('📄 Running content scraping...');
+  const rssContent = article.content || article.contentSnippet || article.summary || '';
+  const url = article.link!;
+  
+  let scrapingData = {
+    rss_excerpt: stripHtmlTags(rssContent),
+    full_content_text: stripHtmlTags(rssContent),
+    content_source: 'rss' as 'rss' | 'scraped' | 'failed',
+    scraping_status: 'failed' as 'pending' | 'success' | 'failed',
+    scraping_error: null as string | null,
+    content_length: stripHtmlTags(rssContent).length,
+  };
+  
+  // Attempt content scraping if URL is scrapeable
+  if (isScrapeable(url)) {
+    console.log(`🕷️  Starting content scraping for: ${url}`);
+    
+    try {
+      const scrapedContent = await scrapeArticleContent(url);
+      
+      if (scrapedContent.success && scrapedContent.content.length > 100) {
+        console.log(`✅ Successfully scraped ${scrapedContent.length} characters from: ${article.title}`);
+        
+        scrapingData = {
+          ...scrapingData,
+          full_content_text: scrapedContent.content,
+          content_source: 'scraped',
+          scraping_status: 'success',
+          scraping_error: null,
+          content_length: scrapedContent.length,
+        };
+      } else {
+        console.log(`⚠️  Scraping failed or insufficient content, using RSS excerpt: ${scrapedContent.error || 'Content too short'}`);
+        scrapingData.scraping_error = scrapedContent.error || 'Scraped content too short';
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Content scraping error for ${article.title}:`, errorMessage);
+      scrapingData.scraping_error = errorMessage;
+    }
+  } else {
+    console.log(`⏭️  URL not scrapeable: ${url}`);
+    scrapingData.scraping_error = 'URL not scrapeable (blocked domain)';
+  }
+  
+  // Initialize OpenAI client
+  const openaiClient = new ChatOpenAI({
+    apiKey: userConfig.openai.apiKey,
+    model: 'gpt-4o-mini',
+    temperature: 0.1
+  });
+  
+  // Do topic filtering with GPT-4o-mini
+  console.log('🔍 Checking topic relevance...');
+  const availableContent = scrapingData.full_content_text || scrapingData.rss_excerpt || 'No content available';
+  const contentPreview = availableContent.length > 4000 ? availableContent.substring(0, 4000) + '...' : availableContent;
+  
+  const topicPrompt = `Is this article relevant to the topic: "${userConfig.appSettings.topicDescription}"?
+
+Article Title: ${article.title}
+
+Article Content:
+${contentPreview}
+
+Instructions:
+- Consider if the article content directly relates to the specified topic
+- Ignore tangential mentions unless they are the main focus
+- Look at the main themes, techniques, tools, and subject matter discussed
+- Respond with ONLY "yes" or "no" (no additional text)
+
+Response:`;
+
+  try {
+    const topicResponse = await openaiClient.invoke([
+      {
+        role: 'user',
+        content: topicPrompt
+      }
+    ]);
+    
+    const responseText = (topicResponse.content as string).toLowerCase().trim();
+    
+    // Parse response
+    let isRelevant = false;
+    if (responseText.includes('yes') && !responseText.includes('no')) {
+      isRelevant = true;
+    } else if (responseText.includes('no') && !responseText.includes('yes')) {
+      isRelevant = false;
+    } else {
+      // Ambiguous response - default to not relevant
+      console.warn(`⚠️ Ambiguous response: "${responseText}" - defaulting to not relevant`);
+      isRelevant = false;
+    }
+    
+    console.log(`✅ Topic relevance check: ${isRelevant ? 'RELEVANT' : 'NOT RELEVANT'}`);
+    
+    if (!isRelevant) {
+      // Article not relevant - mark as topic-filtered
+      return {
+        ...scrapingData,
+        analysis_result: {
+          ai_summary: 'Article not relevant to user topic interests',
+          ai_score: null,
+          category: 'Off-topic'
+        },
+        topic_filtered: true,
+        topic_filtered_at: new Date()
+      };
+    }
+    
+    // Article is relevant - generate basic summary with GPT-4o-mini
+    console.log('📝 Generating basic summary...');
+    const summaryPrompt = `Provide a concise summary of this article in 2-3 sentences. Focus on the main points and key takeaways.
+
+Article Title: ${article.title}
+
+Article Content:
+${contentPreview}
+
+Summary:`;
+    
+    const summaryResponse = await openaiClient.invoke([
+      {
+        role: 'user',
+        content: summaryPrompt
+      }
+    ]);
+    
+    const aiSummary = (summaryResponse.content as string).trim();
+    
+    console.log('✅ Topic-only analysis completed with basic summary');
+    
+    return {
+      ...scrapingData,
+      analysis_result: {
+        ai_summary: aiSummary,
+        ai_score: 5, // Default score for topic-relevant articles
+        category: 'Topic-relevant'
+      },
+      topic_filtered: false
+    };
+    
+  } catch (error) {
+    console.error('❌ Topic-only analysis failed:', error);
+    // On error, return basic data with no scoring
+    return {
+      ...scrapingData,
+      analysis_result: {
+        ai_summary: 'Error during topic analysis',
+        ai_score: null,
+        category: 'Error'
+      },
+      topic_filtered: false
+    };
+  }
+}
+
+/**
  * Enhanced article analysis that integrates adaptive scoring
  * @param article - The RSS article to analyze
  * @param source - The news source configuration
@@ -80,21 +254,21 @@ async function analyzeArticleWithAdaptiveScoring(
 ): Promise<any> {
   console.log(`🔍 Starting enhanced analysis for: ${article.title}`);
   
+  // Check if user has a profile for adaptive scoring
+  console.log('👤 Checking for user profile...');
+  const hasProfile = await checkProfileExists(userConfig);
+  
+  if (!hasProfile) {
+    console.log('ℹ️ No user profile found - using topic-only analysis');
+    return await analyzeArticleWithTopicOnly(article, source, userConfig);
+  }
+  
   // First, run the traditional analysis workflow for content processing and scraping
   console.log('📄 Running content analysis and scraping...');
   const analysisResult = await analyzeArticleWithWorkflow(article, source, userConfig);
   
   if (!analysisResult || !analysisResult.analysis_result) {
     console.log('❌ Content analysis failed, skipping adaptive scoring');
-    return analysisResult;
-  }
-  
-  // Check if user has a profile for adaptive scoring
-  console.log('👤 Checking for user profile...');
-  const hasProfile = await checkProfileExists(userConfig);
-  
-  if (!hasProfile) {
-    console.log('ℹ️ No user profile found - using traditional scoring');
     return analysisResult;
   }
   
