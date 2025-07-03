@@ -30,6 +30,7 @@ interface ArticleData {
   scraping_status: 'pending' | 'completed' | 'failed';
   scraping_error: string | null;
   content_length: number;
+  topic_filtered?: boolean;  // Field to track topic filtering
 }
 
 // Firebase configuration interface
@@ -47,12 +48,22 @@ interface TrashWindowAPI {
   closeWindow: () => void;
   getFirebaseConfig: () => Promise<FirebaseConfig | null>;
   unrateArticle: (articleUrl: string) => Promise<boolean>;
+  rateArticle: (articleUrl: string, isRelevant: boolean) => Promise<boolean>;
 }
+
+// Article categories for trash
+type TrashCategory = 'user-rejected' | 'low-score' | 'topic-filtered';
 
 document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
     // Get DOM elements
-    const articlesContainer = document.getElementById('articles-container') as HTMLDivElement;
-    const articleCountElement = document.getElementById('article-count') as HTMLElement;
+    const userRejectedContainer = document.getElementById('user-rejected-articles') as HTMLDivElement;
+    const lowScoreContainer = document.getElementById('low-score-articles') as HTMLDivElement;
+    const topicFilteredContainer = document.getElementById('topic-filtered-articles') as HTMLDivElement;
+    
+    const userRejectedCount = document.getElementById('user-rejected-count') as HTMLElement;
+    const lowScoreCount = document.getElementById('low-score-count') as HTMLElement;
+    const topicFilteredCount = document.getElementById('topic-filtered-count') as HTMLElement;
+    
     const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
 
     // Event listeners
@@ -64,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
     await initializeTrashWindow();
 
     /**
-     * Initialize the trash window and load not relevant articles
+     * Initialize the trash window and load all trash categories
      */
     async function initializeTrashWindow(): Promise<void> {
         try {
@@ -89,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
     }
 
     /**
-     * Initialize Firebase and set up real-time listener
+     * Initialize Firebase and set up real-time listeners
      */
     async function initializeFirebase(config: FirebaseConfig): Promise<void> {
         try {
@@ -109,8 +120,8 @@ document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
             
             console.log('Firebase initialized successfully for trash window');
             
-            // Set up real-time listener for not relevant articles
-            setupArticleListener(db);
+            // Set up real-time listeners for all trash categories
+            setupArticleListeners(db);
             
         } catch (error) {
             console.error('Error initializing Firebase:', error);
@@ -154,139 +165,225 @@ document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
     }
 
     /**
-     * Set up real-time listener for not relevant articles
+     * Set up real-time listeners for all trash categories
      */
-    function setupArticleListener(db: any): void {
-        console.log('Setting up real-time listener for not relevant articles...');
+    function setupArticleListeners(db: any): void {
+        console.log('Setting up real-time listeners for trash categories...');
         
-        // Query for articles where relevant === false
-        const articlesRef = db.collection('articles').where('relevant', '==', false);
-        
-        articlesRef.onSnapshot((snapshot: any) => {
-            console.log(`Received ${snapshot.docs.length} not relevant articles from Firestore`);
-            
-            if (!articlesContainer) return;
-            
-            // Clear existing content
-            articlesContainer.innerHTML = '';
-            
-            // Convert snapshot to array
-            const notRelevantArticles: ArticleData[] = [];
-            snapshot.forEach((doc: any) => {
-                const articleData = doc.data();
-                notRelevantArticles.push(articleData);
-            });
-            
-            // Update article count
-            updateArticleCount(notRelevantArticles.length);
-            
-            // Display articles
-            if (notRelevantArticles.length === 0) {
-                showEmptyState();
-            } else {
-                // Sort by published date (newest first)
-                notRelevantArticles.sort((a, b) => {
-                    const dateA = a.published_at && typeof (a.published_at as FirebaseTimestamp).toDate === 'function' 
-                        ? (a.published_at as FirebaseTimestamp).toDate() 
-                        : new Date(a.published_at as Date);
-                    const dateB = b.published_at && typeof (b.published_at as FirebaseTimestamp).toDate === 'function' 
-                        ? (b.published_at as FirebaseTimestamp).toDate() 
-                        : new Date(b.published_at as Date);
-                    return dateB.getTime() - dateA.getTime();
-                });
-                
-                notRelevantArticles.forEach(article => {
-                    const articleElement = createArticleElement(article);
-                    articlesContainer.appendChild(articleElement);
-                });
-            }
-            
-            console.log(`Displayed ${notRelevantArticles.length} not relevant articles`);
-        }, (error: Error) => {
-            console.error('Error listening to not relevant articles:', error);
-            showError('Error loading articles. Check console for details.');
+        // 1. User Rejected Articles (relevant === false)
+        const userRejectedRef = db.collection('articles').where('relevant', '==', false);
+        userRejectedRef.onSnapshot((snapshot: any) => {
+            console.log(`Received ${snapshot.docs.length} user rejected articles from Firestore`);
+            const articles = convertSnapshotToArticles(snapshot);
+            updateArticleCount('user-rejected', articles.length);
+            displayArticles(articles, 'user-rejected');
         });
+
+        // 2. Low Score Articles (relevant === null AND ai_score <= 3 AND ai_score > 0 AND NOT topic_filtered)
+        const lowScoreRef = db.collection('articles').where('relevant', '==', null);
+        lowScoreRef.onSnapshot((snapshot: any) => {
+            console.log(`Checking ${snapshot.docs.length} unrated articles for low scores`);
+            const articles = convertSnapshotToArticles(snapshot);
+            
+            // Filter for articles with ai_score <= 3 and ai_score > 0 AND NOT topic_filtered
+            // Only articles that passed topic filtering but got low scores should appear here
+            const lowScoreArticles = articles.filter(article => 
+                article.ai_score > 0 && 
+                article.ai_score <= 3 && 
+                !article.topic_filtered  // Exclude topic-filtered articles
+            );
+            
+            console.log(`Found ${lowScoreArticles.length} low score articles (excluding topic-filtered)`);
+            updateArticleCount('low-score', lowScoreArticles.length);
+            displayArticles(lowScoreArticles, 'low-score');
+        });
+
+        // 3. Topic Filtered Articles (relevant === null AND topic_filtered === true)
+        // Note: This requires articles to have a topic_filtered field
+        const topicFilteredRef = db.collection('articles')
+            .where('relevant', '==', null)
+            .where('topic_filtered', '==', true);
+        
+        topicFilteredRef.onSnapshot((snapshot: any) => {
+            console.log(`Received ${snapshot.docs.length} topic filtered articles from Firestore`);
+            const articles = convertSnapshotToArticles(snapshot);
+            updateArticleCount('topic-filtered', articles.length);
+            displayArticles(articles, 'topic-filtered');
+        }, (error: any) => {
+            // If topic_filtered index doesn't exist, show empty state
+            console.log('Topic filtered query failed (likely no topic_filtered field/index):', error);
+            updateArticleCount('topic-filtered', 0);
+            displayArticles([], 'topic-filtered');
+        });
+    }
+
+    /**
+     * Convert Firestore snapshot to ArticleData array
+     */
+    function convertSnapshotToArticles(snapshot: any): ArticleData[] {
+        const articles: ArticleData[] = [];
+        snapshot.forEach((doc: any) => {
+            const articleData = doc.data();
+            articles.push(articleData);
+        });
+        
+        // Sort by published date (newest first)
+        articles.sort((a, b) => {
+            const dateA = a.published_at && typeof (a.published_at as FirebaseTimestamp).toDate === 'function' 
+                ? (a.published_at as FirebaseTimestamp).toDate() 
+                : new Date(a.published_at as Date);
+            const dateB = b.published_at && typeof (b.published_at as FirebaseTimestamp).toDate === 'function' 
+                ? (b.published_at as FirebaseTimestamp).toDate() 
+                : new Date(b.published_at as Date);
+            return dateB.getTime() - dateA.getTime();
+        });
+        
+        return articles;
+    }
+
+    /**
+     * Display articles in the specified category
+     */
+    function displayArticles(articles: ArticleData[], category: TrashCategory): void {
+        const container = getContainerForCategory(category);
+        if (!container) return;
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        if (articles.length === 0) {
+            showEmptyState(container, category);
+            return;
+        }
+
+        // Create article elements
+        articles.forEach(article => {
+            const articleElement = createArticleElement(article, category);
+            container.appendChild(articleElement);
+        });
+    }
+
+    /**
+     * Get the container element for a category
+     */
+    function getContainerForCategory(category: TrashCategory): HTMLDivElement | null {
+        switch (category) {
+            case 'user-rejected':
+                return userRejectedContainer;
+            case 'low-score':
+                return lowScoreContainer;
+            case 'topic-filtered':
+                return topicFilteredContainer;
+            default:
+                return null;
+        }
     }
 
     /**
      * Create HTML element for an article
      */
-    function createArticleElement(article: ArticleData): HTMLDivElement {
-        const articleElement = document.createElement('div');
-        articleElement.classList.add('article');
-        
-        // Handle Firestore Timestamp
-        let publishedDate: string;
-        try {
-            if (article.published_at && typeof (article.published_at as FirebaseTimestamp).toDate === 'function') {
-                publishedDate = (article.published_at as FirebaseTimestamp).toDate().toLocaleDateString();
-            } else if (article.published_at instanceof Date) {
-                publishedDate = article.published_at.toLocaleDateString();
-            } else {
-                publishedDate = 'Unknown date';
+    function createArticleElement(article: ArticleData, category: TrashCategory): HTMLDivElement {
+        const articleDiv = document.createElement('div');
+        articleDiv.className = 'article';
+        articleDiv.setAttribute('data-url', article.url);
+
+        // Format published date
+        let publishedDate = 'Unknown date';
+        if (article.published_at) {
+            try {
+                const date = typeof (article.published_at as FirebaseTimestamp).toDate === 'function' 
+                    ? (article.published_at as FirebaseTimestamp).toDate() 
+                    : new Date(article.published_at as Date);
+                publishedDate = date.toLocaleDateString();
+            } catch (error) {
+                console.error('Error formatting date:', error);
             }
-        } catch (error) {
-            console.warn('Error formatting date:', error);
-            publishedDate = 'Unknown date';
         }
-        
-        // Handle rated date
-        let ratedDate: string;
-        try {
-            if (article.rated_at && typeof (article.rated_at as FirebaseTimestamp).toDate === 'function') {
-                ratedDate = (article.rated_at as FirebaseTimestamp).toDate().toLocaleDateString();
-            } else if (article.rated_at instanceof Date) {
-                ratedDate = article.rated_at.toLocaleDateString();
-            } else {
-                ratedDate = 'Unknown date';
-            }
-        } catch (error) {
-            console.warn('Error formatting rated date:', error);
-            ratedDate = 'Unknown date';
+
+        // Get badge text and determine available actions based on category
+        const badgeText = getBadgeText(category, article);
+        const canUnrate = category === 'user-rejected'; // Only user rejected articles can be unrated
+        const canRate = category === 'low-score'; // Only low score articles can be rated
+
+        // Create action buttons based on category
+        let actionButtonsHtml = '';
+        if (canUnrate) {
+            actionButtonsHtml = `
+                <button class="unrate-btn" data-url="${escapeHtml(article.url)}">
+                    Unrate
+                </button>
+            `;
+        } else if (canRate) {
+            actionButtonsHtml = `
+                <button class="rating-btn relevant-btn" data-url="${escapeHtml(article.url)}" data-relevant="true">
+                    Relevant
+                </button>
+                <button class="rating-btn not-relevant-btn" data-url="${escapeHtml(article.url)}" data-relevant="false">
+                    Not Relevant
+                </button>
+            `;
         }
-        
-        // Determine content type icon
-        const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
-        
-        articleElement.innerHTML = `
+
+        articleDiv.innerHTML = `
             <div class="article-header">
-                <h2 class="article-title">${escapeHtml(article.title)}</h2>
-                <div class="trash-badge">Not Relevant</div>
+                <h3 class="article-title">${escapeHtml(article.title)}</h3>
+                <div class="article-badge">${badgeText}</div>
             </div>
-            <p class="article-summary">${escapeHtml(article.ai_summary)}</p>
+            <p class="article-summary">${escapeHtml(article.ai_summary || 'No summary available')}</p>
             <div class="article-actions">
                 <div class="action-left">
                     <a href="${escapeHtml(article.url)}" target="_blank" class="read-full-link">
-                        Read Full Article ↗
+                        Read Full Article
                     </a>
                 </div>
-                <button class="unrate-btn" data-article-url="${escapeHtml(article.url)}">
-                    🔄 Unrate Article
-                </button>
+                <div class="action-right">
+                    ${actionButtonsHtml}
+                </div>
             </div>
             <div class="article-meta">
-                <span>Source: ${escapeHtml(article.source_name)}</span>
-                <span>Published: ${publishedDate}</span>
-                <span>Marked not relevant: ${ratedDate}</span>
-                <span>Score: ${article.ai_score.toFixed(1)}</span>
-                <span>${contentTypeIcon} ${article.content_source}</span>
+                <span>📰 ${escapeHtml(article.source_name || 'Unknown Source')}</span>
+                <span>📅 ${publishedDate}</span>
+                ${article.ai_score > 0 ? `<span>🧠 Score: ${article.ai_score}/10</span>` : ''}
             </div>
         `;
-        
-        // Add event listener for unrate button
-        const unrateButton = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
-        if (unrateButton) {
-            unrateButton.addEventListener('click', async (e: Event) => {
-                e.preventDefault();
-                const articleUrl = unrateButton.getAttribute('data-article-url');
-                
-                if (articleUrl) {
-                    await unrateArticle(articleUrl, articleElement);
-                }
+
+        // Add event listeners based on category
+        if (canUnrate) {
+            const unrateBtn = articleDiv.querySelector('.unrate-btn') as HTMLButtonElement;
+            if (unrateBtn) {
+                unrateBtn.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    await unrateArticle(article.url, articleDiv);
+                });
+            }
+        } else if (canRate) {
+            const ratingBtns = articleDiv.querySelectorAll('.rating-btn') as NodeListOf<HTMLButtonElement>;
+            ratingBtns.forEach(btn => {
+                btn.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    const isRelevant = btn.getAttribute('data-relevant') === 'true';
+                    await rateArticle(article.url, isRelevant, articleDiv);
+                });
             });
         }
-        
-        return articleElement;
+
+        return articleDiv;
+    }
+
+    /**
+     * Get badge text for different categories
+     */
+    function getBadgeText(category: TrashCategory, article: ArticleData): string {
+        switch (category) {
+            case 'user-rejected':
+                return 'Not Relevant';
+            case 'low-score':
+                return `Score: ${article.ai_score}/10`;
+            case 'topic-filtered':
+                return 'Topic Filtered';
+            default:
+                return 'Filtered';
+        }
     }
 
     /**
@@ -294,99 +391,167 @@ document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
      */
     async function unrateArticle(articleUrl: string, articleElement: HTMLDivElement): Promise<void> {
         try {
-            console.log(`Unrating article: ${articleUrl}`);
+            console.log('Unrating article:', articleUrl);
             
-            // Show loading state
-            const unrateButton = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
-            if (unrateButton) {
-                unrateButton.innerHTML = '⏳ Unrating...';
-                unrateButton.disabled = true;
-                unrateButton.classList.add('loading');
-            }
+                         // Show loading state
+             const unrateBtn = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
+             const originalText = unrateBtn ? unrateBtn.textContent : 'Unrate';
+             if (unrateBtn) {
+                 unrateBtn.textContent = 'Unrating...';
+                 unrateBtn.disabled = true;
+             }
+
+            // Call main process to unrate the article
+            const success = await (window as any).trashAPI.unrateArticle(articleUrl);
             
-            // Create article ID from URL (same method used in main workflow)
-            const crypto = window.crypto;
-            const encoder = new TextEncoder();
-            const data = encoder.encode(articleUrl);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            
-            // Get Firebase instance - use the existing app
-            const firebase = (window as any).firebase;
-            if (!firebase) {
-                throw new Error('Firebase not available');
-            }
-            
-            const app = firebase.app('trash-app');
-            const db = firebase.firestore(app);
-            
-            // Update the article to remove rating
-            await db.collection('articles').doc(articleId).update({
-                relevant: null,
-                rated_at: null
-            });
-            
-            console.log('✅ Successfully unrated article');
-            
-            // Show success message briefly
-            if (unrateButton) {
-                unrateButton.innerHTML = '✅ Unrated';
-                unrateButton.classList.remove('loading');
-            }
-            
-            // Animate article removal
-            articleElement.classList.add('removing');
-            
-            // Remove article from DOM after animation
-            setTimeout(() => {
-                if (articleElement.parentNode) {
-                    articleElement.parentNode.removeChild(articleElement);
+            if (success) {
+                console.log('Article unrated successfully');
+                
+                // Add removal animation
+                articleElement.classList.add('removing');
+                
+                // Remove element after animation
+                setTimeout(() => {
+                    if (articleElement.parentNode) {
+                        articleElement.parentNode.removeChild(articleElement);
+                    }
+                }, 300);
+                
+            } else {
+                console.error('Failed to unrate article');
+                
+                // Restore button state
+                if (unrateBtn) {
+                    unrateBtn.textContent = originalText || 'Unrate';
+                    unrateBtn.disabled = false;
                 }
-            }, 300);
+                
+                alert('Failed to unrate article. Please try again.');
+            }
             
         } catch (error) {
             console.error('Error unrating article:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Error unrating article: ${errorMessage}`);
             
-            // Show error and restore button
-            const unrateButton = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
-            if (unrateButton) {
-                unrateButton.innerHTML = '❌ Error - Try Again';
-                unrateButton.disabled = false;
-                unrateButton.classList.remove('loading');
+            // Restore button state
+            const unrateBtn = articleElement.querySelector('.unrate-btn') as HTMLButtonElement;
+            if (unrateBtn) {
+                unrateBtn.textContent = 'Unrate';
+                unrateBtn.disabled = false;
+            }
+        }
+    }
+
+    /**
+     * Rate an article (set relevant to true or false)
+     */
+    async function rateArticle(articleUrl: string, isRelevant: boolean, articleElement: HTMLDivElement): Promise<void> {
+        try {
+            console.log(`Rating article as ${isRelevant ? 'relevant' : 'not relevant'}:`, articleUrl);
+            
+            // Show loading state on all rating buttons
+            const ratingBtns = articleElement.querySelectorAll('.rating-btn') as NodeListOf<HTMLButtonElement>;
+            const originalTexts = Array.from(ratingBtns).map(btn => btn.textContent || '');
+            
+            ratingBtns.forEach(btn => {
+                btn.textContent = 'Rating...';
+                btn.disabled = true;
+            });
+
+            // Call main process to rate the article
+            const success = await (window as any).trashAPI.rateArticle(articleUrl, isRelevant);
+            
+            if (success) {
+                console.log('Article rated successfully');
                 
-                // Restore original button after 3 seconds
+                // Add removal animation
+                articleElement.classList.add('removing');
+                
+                // Remove element after animation
                 setTimeout(() => {
-                    unrateButton.innerHTML = '🔄 Unrate Article';
-                }, 3000);
-            }
-        }
-    }
-
-    /**
-     * Update the article count display
-     */
-    function updateArticleCount(count: number): void {
-        if (articleCountElement) {
-            if (count === 0) {
-                articleCountElement.textContent = 'No articles in trash';
-            } else if (count === 1) {
-                articleCountElement.textContent = '1 article in trash';
+                    if (articleElement.parentNode) {
+                        articleElement.parentNode.removeChild(articleElement);
+                    }
+                }, 300);
+                
             } else {
-                articleCountElement.textContent = `${count} articles in trash`;
+                console.error('Failed to rate article');
+                
+                // Restore button states
+                ratingBtns.forEach((btn, index) => {
+                    btn.textContent = originalTexts[index] || 'Rate';
+                    btn.disabled = false;
+                });
+                
+                alert('Failed to rate article. Please try again.');
             }
+            
+        } catch (error) {
+            console.error('Error rating article:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Error rating article: ${errorMessage}`);
+            
+            // Restore button states
+            const ratingBtns = articleElement.querySelectorAll('.rating-btn') as NodeListOf<HTMLButtonElement>;
+            ratingBtns.forEach(btn => {
+                btn.textContent = btn.classList.contains('relevant-btn') ? 'Relevant' : 'Not Relevant';
+                btn.disabled = false;
+            });
         }
     }
 
     /**
-     * Show empty state when no articles are found
+     * Update article count for a category
      */
-    function showEmptyState(): void {
-        articlesContainer.innerHTML = `
+    function updateArticleCount(category: TrashCategory, count: number): void {
+        const countElement = getCountElementForCategory(category);
+        if (countElement) {
+            countElement.textContent = count.toString();
+        }
+    }
+
+    /**
+     * Get count element for a category
+     */
+    function getCountElementForCategory(category: TrashCategory): HTMLElement | null {
+        switch (category) {
+            case 'user-rejected':
+                return userRejectedCount;
+            case 'low-score':
+                return lowScoreCount;
+            case 'topic-filtered':
+                return topicFilteredCount;
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Show empty state for a category
+     */
+    function showEmptyState(container: HTMLDivElement, category: TrashCategory): void {
+        const emptyMessages = {
+            'user-rejected': {
+                title: 'No rejected articles',
+                message: 'Articles you mark as "Not Relevant" will appear here.'
+            },
+            'low-score': {
+                title: 'No low score articles',
+                message: 'Articles that passed topic filtering but scored ≤ 3 will appear here.'
+            },
+            'topic-filtered': {
+                title: 'No topic filtered articles',
+                message: 'Articles rejected by topic relevance will appear here.'
+            }
+        };
+
+        const message = emptyMessages[category];
+        
+        container.innerHTML = `
             <div class="empty-state">
-                <h2>🎉 Trash is Empty!</h2>
-                <p>No articles marked as "Not Relevant".<br>
-                Articles you mark as not relevant will appear here.</p>
+                <h3>${message.title}</h3>
+                <p>${message.message}</p>
             </div>
         `;
     }
@@ -395,16 +560,17 @@ document.addEventListener('DOMContentLoaded', async (): Promise<void> => {
      * Show error state
      */
     function showError(message: string): void {
-        articlesContainer.innerHTML = `
-            <div class="error-state">
-                <h2>⚠️ Error</h2>
-                <p>${escapeHtml(message)}</p>
-            </div>
-        `;
+        const containers = [userRejectedContainer, lowScoreContainer, topicFilteredContainer];
         
-        if (articleCountElement) {
-            articleCountElement.textContent = 'Error loading articles';
-        }
+        containers.forEach(container => {
+            if (container) {
+                container.innerHTML = `
+                    <div class="error-state">
+                        <p>Error: ${escapeHtml(message)}</p>
+                    </div>
+                `;
+            }
+        });
     }
 
     /**

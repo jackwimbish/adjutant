@@ -5,22 +5,12 @@ import { UserConfig } from '../config/user-config';
 contextBridge.exposeInMainWorld('settingsAPI', {
   // Load existing configuration
   loadConfig: (): Promise<UserConfig | null> => {
-    return ipcRenderer.invoke('settings:load-config');
+    return ipcRenderer.invoke('config:load');
   },
 
-  // Save configuration
-  saveConfig: (config: UserConfig): Promise<boolean> => {
-    return ipcRenderer.invoke('settings:save-config', config);
-  },
-
-  // Test Firebase connection
-  testFirebase: (firebaseConfig: UserConfig['firebase']): Promise<{ success: boolean; message: string }> => {
-    return ipcRenderer.invoke('settings:test-firebase', firebaseConfig);
-  },
-
-  // Test OpenAI connection
-  testOpenAI: (openaiConfig: UserConfig['openai']): Promise<{ success: boolean; message: string }> => {
-    return ipcRenderer.invoke('settings:test-openai', openaiConfig);
+  // Save topic settings
+  saveTopicSettings: (settings: { topicDescription: string }): Promise<boolean> => {
+    return ipcRenderer.invoke('save-topic-settings', settings);
   },
 
   // Close settings window
@@ -28,19 +18,9 @@ contextBridge.exposeInMainWorld('settingsAPI', {
     ipcRenderer.send('settings:close-window');
   },
 
-  // Open topic settings window
-  openTopicSettings: (): void => {
-    ipcRenderer.send('settings:open-topic-settings');
-  },
-
-  // Listen for events from main process
-  onConfigSaved: (callback: () => void): void => {
-    ipcRenderer.on('settings:config-saved', callback);
-  },
-
-  // Remove event listeners
-  removeAllListeners: (): void => {
-    ipcRenderer.removeAllListeners('settings:config-saved');
+  // Open API configuration window
+  openApiConfig: (): void => {
+    ipcRenderer.send('settings:open-api-config');
   }
 });
 
@@ -49,13 +29,9 @@ declare global {
   interface Window {
     settingsAPI: {
       loadConfig: () => Promise<UserConfig | null>;
-      saveConfig: (config: UserConfig) => Promise<boolean>;
-      testFirebase: (firebaseConfig: UserConfig['firebase']) => Promise<{ success: boolean; message: string }>;
-      testOpenAI: (openaiConfig: UserConfig['openai']) => Promise<{ success: boolean; message: string }>;
+      saveTopicSettings: (settings: { topicDescription: string }) => Promise<boolean>;
       closeWindow: () => void;
-      openTopicSettings: () => void;
-      onConfigSaved: (callback: () => void) => void;
-      removeAllListeners: () => void;
+      openApiConfig: () => void;
     };
   }
 } 

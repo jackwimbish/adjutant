@@ -115,6 +115,7 @@ function initializeFirebase(): void {
  */
 function setupArticleListeners(): void {
   // Listen for unrated articles (simplified query to avoid index requirement)
+  // Exclude articles with low scores (ai_score <= 3) from the main unrated feed
   const unratedQuery = db.collection('articles')
     .where('relevant', '==', null);
     
@@ -122,6 +123,13 @@ function setupArticleListeners(): void {
     const articles: ArticleData[] = [];
     snapshot.forEach((doc: any) => {
       const data = doc.data();
+      
+      // Filter out articles with ai_score <= 3 (they should go to trash instead)
+      const aiScore = data.ai_score || 0;
+      if (aiScore <= 3 && aiScore > 0) {
+        return; // Skip this article, it belongs in trash
+      }
+      
       articles.push({
         url: data.url || doc.id,                             // Fixed: use actual URL from data, not document ID
         title: data.title || 'No title',

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings</title>
+    <title>API Configuration</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -16,8 +16,8 @@
             box-sizing: border-box;
         }
 
-        .settings-container {
-            max-width: 500px;
+        .api-config-container {
+            max-width: 600px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 12px;
@@ -67,7 +67,7 @@
             font-size: 14px;
         }
 
-        input[type="text"], textarea {
+        input[type="text"], input[type="password"] {
             width: 100%;
             padding: 12px;
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -77,19 +77,17 @@
             font-size: 14px;
             transition: all 0.3s ease;
             box-sizing: border-box;
-            font-family: inherit;
         }
 
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        input[type="text"]:focus, textarea:focus {
+        input[type="text"]:focus, input[type="password"]:focus {
             outline: none;
             border-color: #4CAF50;
             background: rgba(255, 255, 255, 0.08);
             box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        input[type="text"]:invalid, input[type="password"]:invalid {
+            border-color: #f44336;
         }
 
         .button-group {
@@ -132,19 +130,22 @@
             transform: translateY(-2px);
         }
 
-        .btn-link {
-            background: none;
-            color: #4CAF50;
-            border: 1px solid #4CAF50;
-            text-decoration: none;
+        .btn-test {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
             font-size: 12px;
             padding: 8px 16px;
-            min-width: auto;
+            min-width: 80px;
         }
 
-        .btn-link:hover {
-            background: rgba(76, 175, 80, 0.1);
+        .btn-test:hover {
+            background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
             transform: translateY(-1px);
+        }
+
+        .test-button-container {
+            margin-top: 10px;
+            text-align: right;
         }
 
         .status-message {
@@ -190,11 +191,6 @@
             line-height: 1.4;
         }
 
-        .api-config-link {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -208,23 +204,68 @@
 </head>
 
 <body>
-    <div class="settings-container">
-        <h1>⚙️ Settings</h1>
-        <p class="subtitle">Configure your application preferences</p>
+    <div class="api-config-container">
+        <h1>🔑 API Configuration</h1>
+        <p class="subtitle">Configure your Firebase and OpenAI API credentials</p>
         
-        <div class="api-config-link">
-            <button type="button" id="open-api-config" class="btn-link">🔑 API Configuration</button>
-        </div>
-        
-        <form id="settings-form">
-            <!-- Topic Configuration -->
+        <form id="api-config-form">
+            <!-- Firebase Configuration -->
             <div class="form-section">
-                <div class="section-title">Topic Settings</div>
+                <div class="section-title">Firebase Configuration</div>
                 
                 <div class="form-group">
-                    <label for="topic-description">Topic Description <span class="required">*</span></label>
-                    <textarea id="topic-description" name="topic-description" required placeholder="Describe the topics you're interested in..."></textarea>
-                    <div class="help-text">Describe the topics you want to see in your news feed. This helps filter relevant articles.</div>
+                    <label for="firebase-api-key">API Key <span class="required">*</span></label>
+                    <input type="password" id="firebase-api-key" name="firebase-api-key" required>
+                    <div class="help-text">Your Firebase project's API key</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-auth-domain">Auth Domain <span class="required">*</span></label>
+                    <input type="text" id="firebase-auth-domain" name="firebase-auth-domain" required>
+                    <div class="help-text">Usually: your-project.firebaseapp.com</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-project-id">Project ID <span class="required">*</span></label>
+                    <input type="text" id="firebase-project-id" name="firebase-project-id" required>
+                    <div class="help-text">Your Firebase project identifier</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-storage-bucket">Storage Bucket <span class="required">*</span></label>
+                    <input type="text" id="firebase-storage-bucket" name="firebase-storage-bucket" required>
+                    <div class="help-text">Usually: your-project.appspot.com</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-messaging-sender-id">Messaging Sender ID <span class="required">*</span></label>
+                    <input type="text" id="firebase-messaging-sender-id" name="firebase-messaging-sender-id" required>
+                    <div class="help-text">Numeric ID for Firebase messaging</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firebase-app-id">App ID <span class="required">*</span></label>
+                    <input type="text" id="firebase-app-id" name="firebase-app-id" required>
+                    <div class="help-text">Your Firebase app identifier</div>
+                </div>
+
+                <div class="test-button-container">
+                    <button type="button" id="test-firebase" class="btn-test">Test Firebase</button>
+                </div>
+            </div>
+
+            <!-- OpenAI Configuration -->
+            <div class="form-section">
+                <div class="section-title">OpenAI Configuration</div>
+                
+                <div class="form-group">
+                    <label for="openai-api-key">API Key <span class="required">*</span></label>
+                    <input type="password" id="openai-api-key" name="openai-api-key" required>
+                    <div class="help-text">Your OpenAI API key (starts with sk-)</div>
+                </div>
+
+                <div class="test-button-container">
+                    <button type="button" id="test-openai" class="btn-test">Test OpenAI</button>
                 </div>
             </div>
 
@@ -234,12 +275,12 @@
             <!-- Action Buttons -->
             <div class="button-group">
                 <button type="button" id="cancel-btn" class="btn-secondary">Cancel</button>
-                <button type="submit" id="save-btn" class="btn-primary">Save Settings</button>
+                <button type="submit" id="save-btn" class="btn-primary">Save Configuration</button>
             </div>
         </form>
     </div>
 
-    <script src="settings.js"></script>
+    <script src="api-config.js"></script>
 </body>
 
 </html> 

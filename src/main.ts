@@ -18,6 +18,7 @@ let userConfig: UserConfig | null = null;
 // Window registry for data-driven window management
 const windowRegistry = new Map<string, BrowserWindow | null>([
   ['main', null],
+  ['api-config', null],
   ['settings', null],
   ['topic-settings', null],
   ['trash', null],
@@ -45,10 +46,25 @@ const windowDefinitions: WindowDefinition[] = [
     showMenuBar: true,
   },
   {
-    id: 'settings',
+    id: 'api-config',
     width: 700,
     height: 800,
-    title: 'Adjutant Settings',
+    title: 'API Configuration',
+    htmlFile: 'windows/api-config.html',
+    preloadFile: 'windows/api-config-preload.js',
+    resizable: false,
+    modal: true,
+    showMenuBar: false,
+    menu: {
+      label: 'API Configuration...',
+      accelerator: 'CmdOrCtrl+A',
+    },
+  },
+  {
+    id: 'settings',
+    width: 600,
+    height: 500,
+    title: 'Settings',
     htmlFile: 'windows/settings.html',
     preloadFile: 'windows/settings-preload.js',
     resizable: false,
@@ -130,6 +146,32 @@ function setupIpcHandlers(): void {
  * Handlers for configuration loading, saving, and validation
  */
 function setupConfigHandlers(): void {
+  // Generic config loading (used by both API config and settings)
+  ipcMain.handle('config:load', async () => {
+    try {
+      return loadUserConfig();
+    } catch (error) {
+      console.error('Error loading config via IPC:', error);
+      return null;
+    }
+  });
+
+  // Full config saving (used by API configuration window)
+  ipcMain.handle('config:save', async (event, config: UserConfig) => {
+    try {
+      const success = saveUserConfig(config);
+      if (success) {
+        userConfig = config;
+        console.log('Full configuration saved successfully');
+      }
+      return success;
+    } catch (error) {
+      console.error('Error saving config via IPC:', error);
+      return false;
+    }
+  });
+
+  // Legacy handlers for backward compatibility
   ipcMain.handle('settings:load-config', async () => {
     try {
       return loadUserConfig();
@@ -194,13 +236,61 @@ function setupConfigHandlers(): void {
  * Handlers for testing API connections (Firebase and OpenAI)
  */
 function setupApiTestHandlers(): void {
-  ipcMain.handle('settings:test-firebase', async (event, firebaseConfig: UserConfig['firebase']) => {
+  // API testing handlers (used by API configuration window)
+  ipcMain.handle('api-test:firebase', async (event, firebaseConfig: UserConfig['firebase']) => {
     try {
       // Test Firebase connection by attempting to initialize
       const { initializeApp } = await import('firebase/app');
       const { getFirestore, connectFirestoreEmulator } = await import('firebase/firestore');
       
       const testApp = initializeApp(firebaseConfig, 'test-app');
+      const testDb = getFirestore(testApp);
+      
+      // If we get here without error, Firebase config is valid
+      return { success: true, message: 'Firebase configuration is valid' };
+    } catch (error: any) {
+      console.error('Firebase test failed:', error);
+      return { success: false, message: error.message || 'Firebase connection failed' };
+    }
+  });
+
+  ipcMain.handle('api-test:openai', async (event, openaiConfig: UserConfig['openai']) => {
+    try {
+      const { OpenAI } = await import('openai');
+      const client = new OpenAI({
+        apiKey: openaiConfig.apiKey,
+      });
+
+      // Test with a minimal API call
+      await client.models.list();
+      
+      return { success: true, message: 'OpenAI connection successful' };
+    } catch (error: any) {
+      console.error('OpenAI test failed:', error);
+      let message = 'OpenAI connection failed';
+      
+      if (error.status === 401) {
+        message = 'Invalid API key';
+      } else if (error.status === 403) {
+        message = 'API key lacks necessary permissions';
+      } else if (error.status === 429) {
+        message = 'Rate limit exceeded';
+      } else if (error.message) {
+        message = error.message;
+      }
+      
+      return { success: false, message };
+    }
+  });
+
+  // Legacy handlers for backward compatibility
+  ipcMain.handle('settings:test-firebase', async (event, firebaseConfig: UserConfig['firebase']) => {
+    try {
+      // Test Firebase connection by attempting to initialize
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, connectFirestoreEmulator } = await import('firebase/firestore');
+      
+      const testApp = initializeApp(firebaseConfig, 'test-app-legacy');
       const testDb = getFirestore(testApp);
       
       // If we get here without error, Firebase config is valid
@@ -245,6 +335,21 @@ function setupApiTestHandlers(): void {
  * Handlers for window management (opening, closing, navigation)
  */
 function setupWindowHandlers(): void {
+  // API Configuration window handlers
+  ipcMain.handle('window:close-api-config', () => {
+    closeWindow('api-config');
+  });
+
+  ipcMain.on('open-api-config', () => {
+    openWindow('api-config');
+  });
+
+  ipcMain.on('settings:open-api-config', () => {
+    closeWindow('settings');
+    openWindow('api-config');
+  });
+
+  // Settings window handlers
   ipcMain.on('settings:close-window', () => {
     closeWindow('settings');
   });
@@ -260,7 +365,7 @@ function setupWindowHandlers(): void {
 
   ipcMain.on('open-api-settings', () => {
     closeWindow('topic-settings');
-    openWindow('settings');
+    openWindow('api-config');
   });
 
   ipcMain.on('open-settings', () => {
@@ -286,6 +391,43 @@ function setupWindowHandlers(): void {
 
   ipcMain.on('trash:close-window', () => {
     closeWindow('trash');
+  });
+
+  // Add trash window article rating handlers
+  ipcMain.handle('trash:unrate-article', async (event, articleUrl: string) => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot unrate article - no user configuration');
+        return false;
+      }
+      
+      const { ArticleService } = await import('./services/article-service');
+      const articleService = new ArticleService(userConfig.firebase);
+      await articleService.unrateArticle(articleUrl);
+      return true;
+      
+    } catch (error) {
+      console.error('Error unrating article:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('trash:rate-article', async (event, articleUrl: string, isRelevant: boolean) => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot rate article - no user configuration');
+        return false;
+      }
+      
+      const { ArticleService } = await import('./services/article-service');
+      const articleService = new ArticleService(userConfig.firebase);
+      await articleService.rateArticle(articleUrl, isRelevant);
+      return true;
+      
+    } catch (error) {
+      console.error('Error rating article:', error);
+      return false;
+    }
   });
 
   ipcMain.on('open-trash', () => {
@@ -653,17 +795,17 @@ async function initializeApp(): Promise<void> {
   userConfig = loadUserConfig();
   
   if (!userConfig || !isConfigValid(userConfig) || userConfig.firstRun) {
-    console.log('No valid configuration found or first run - showing settings window');
+    console.log('No valid configuration found or first run - showing API configuration window');
     
-    // Show settings window first
-    openWindow('settings');
+    // Show API configuration window first
+    openWindow('api-config');
     
-    // Wait for settings to be configured before continuing
+    // Wait for API configuration to be configured before continuing
     return new Promise((resolve) => {
       const checkConfig = () => {
-        const settingsWindow = windowRegistry.get('settings');
-        if (settingsWindow && settingsWindow.isDestroyed()) {
-          // Settings window was closed, check if we have config now
+        const apiConfigWindow = windowRegistry.get('api-config');
+        if (apiConfigWindow && apiConfigWindow.isDestroyed()) {
+          // API configuration window was closed, check if we have config now
           userConfig = loadUserConfig();
           if (userConfig && isConfigValid(userConfig)) {
             console.log('Configuration completed, starting main application');
@@ -674,7 +816,7 @@ async function initializeApp(): Promise<void> {
             app.quit();
           }
         } else {
-          // Settings window still open, check again in 1 second
+          // API configuration window still open, check again in 1 second
           setTimeout(checkConfig, 1000);
         }
       };
@@ -700,7 +842,7 @@ app.whenReady().then(async () => {
       if (userConfig && isConfigValid(userConfig)) {
         createMainWindow();
       } else {
-        openWindow('settings');
+        openWindow('api-config');
       }
     }
   });
