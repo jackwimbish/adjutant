@@ -14,7 +14,7 @@ The main process [src/main.ts](mdc:src/main.ts) now uses a centralized IPC handl
 ### Handler Groups
 - **Configuration Handlers** (`setupConfigHandlers()`) - Loading, saving, and validation
 - **API Testing Handlers** (`setupApiTestHandlers()`) - Firebase and OpenAI connection testing
-- **Window Management Handlers** (`setupWindowHandlers()`) - Opening, closing, navigation
+- **Window Management Handlers** (`setupWindowHandlers()`) - Opening, closing, navigation, workflow control
 - **Legacy Handlers** (`setupLegacyHandlers()`) - Backward compatibility
 
 ### Implementation Pattern
@@ -64,6 +64,12 @@ function createSettingsWindow(): void {
   });
 }
 ```
+
+### Current Window Implementations
+- **Main Window**: Article browsing interface (1200x800, non-modal)
+- **Settings Window**: API configuration (700x800, modal)
+- **Topic Settings Window**: Topic filtering (600x700, modal)
+- **Trash Window**: Not relevant articles management (1000x800, modal, resizable)
 
 ## Configuration System with Schema Validation
 The configuration system in [src/config/user-config.ts](mdc:src/config/user-config.ts) uses Zod for robust validation:
@@ -129,6 +135,40 @@ async function handleTestFirebase() {
 }
 ```
 
+## Firebase Integration Pattern
+Each window that uses Firebase creates its own app instance to prevent conflicts:
+
+### Trash Window Example
+```javascript
+// Initialize Firebase app with unique name for trash window
+const app = firebase.initializeApp(config, 'trash-app');
+
+// Get Firestore instance from the specific app
+const db = firebase.firestore(app);
+
+// Later, when accessing Firebase in the same window
+const app = firebase.app('trash-app');
+const db = firebase.firestore(app);
+```
+
+## Article Rating System Architecture
+The application uses a simplified relevance-based rating system:
+
+### Data Model
+```typescript
+interface ArticleData {
+  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
+  rated_at?: Date;          // When the rating was applied
+  // ... other fields
+}
+```
+
+### UI Flow
+1. **Unrated Articles**: Show in left column with "Relevant" / "Not Relevant" buttons
+2. **Relevant Articles**: Show in right column with "Unrate" button
+3. **Not Relevant Articles**: Hidden from main view, accessible via Trash window
+4. **Trash Management**: View and unrate not relevant articles
+
 ## Development Workflow
 After refactoring, the development workflow requires:
 
@@ -139,8 +179,31 @@ After refactoring, the development workflow requires:
    cp src/windows/settings.js dist/windows/
    cp src/windows/topic-settings.html dist/windows/
    cp src/windows/topic-settings.js dist/windows/
+   cp src/windows/trash.html dist/windows/
+   cp src/windows/trash.js dist/windows/
    ```
 3. **Application Start**: `npm start`
+
+## Menu Integration Pattern
+Application menu items follow a consistent pattern:
+
+```typescript
+{
+  label: 'Window Name...',
+  accelerator: 'CmdOrCtrl+Key',
+  click: () => {
+    if (!windowReference || windowReference.isDestroyed()) {
+      createWindowFunction();
+    } else {
+      windowReference.focus();
+    }
+  }
+}
+```
+
+### Current Menu Items
+- **Settings**: `Cmd+,` - Opens API configuration
+- **Trash**: `Cmd+T` - Opens not relevant articles management
 
 ## Code Quality Improvements
 The refactoring achieved:
@@ -149,11 +212,14 @@ The refactoring achieved:
 - **Type-safe window creation** with consistent security defaults
 - **Robust configuration validation** with detailed error reporting
 - **Cross-platform compatibility** with fallback mechanisms
+- **Firebase instance isolation** preventing conflicts between windows
 
 ## Future Development Guidelines
 When adding new features:
 1. **IPC Handlers**: Add to appropriate handler group in `setupIpcHandlers()`
 2. **Windows**: Use the `createWindow()` factory with `WindowConfig`
-3. **Configuration**: Extend the Zod schema and update validation
-4. **UI Logic**: Create helper functions to avoid duplication
-5. **Build Process**: Remember to copy non-TypeScript assets to `dist/`
+3. **Firebase Integration**: Create unique app instances for each window
+4. **Configuration**: Extend the Zod schema and update validation
+5. **UI Logic**: Create helper functions to avoid duplication
+6. **Build Process**: Remember to copy non-TypeScript assets to `dist/`
+7. **Menu Items**: Follow the consistent menu integration pattern

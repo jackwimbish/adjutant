@@ -1,0 +1,229 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Workflow System
+
+## Overview
+Adjutant uses a manual workflow system for fetching and processing articles. The workflow has been changed from automatic (every 30 minutes) to user-triggered for better control and resource management.
+
+## Workflow Trigger
+
+### Manual Execution
+- **UI Button**: "📰 Fetch Stories" in main window header
+- **User Control**: Stories are fetched only when user clicks the button
+- **Visual Feedback**: Button shows loading states and success/error messages
+
+### Button States
+```javascript
+// Loading state
+fetchBtn.textContent = '⏳ Fetching Stories...';
+fetchBtn.disabled = true;
+
+// Success state
+fetchBtn.textContent = '✅ Stories Fetching...';
+
+// Error state
+fetchBtn.textContent = '❌ Fetch Failed';
+
+// Auto-reset after 3 seconds
+setTimeout(() => {
+  fetchBtn.textContent = '📰 Fetch Stories';
+  fetchBtn.disabled = false;
+}, 3000);
+```
+
+## Workflow Architecture
+
+### LangGraph-Style Processing
+The workflow uses a multi-step approach with state management:
+
+```typescript
+interface AnalysisState {
+  // Input data
+  article: RSSItem;
+  source: NewsSource;
+  content: string;
+  userConfig?: UserConfig;
+  
+  // Analysis results
+  ai_summary?: string;
+  ai_score?: number;
+  ai_category?: string;
+  
+  // Quality control
+  quality_issues: string[];
+  retry_count: number;
+  max_retries: number;
+  
+  // Content scraping
+  rss_excerpt?: string;
+  full_content_text?: string;
+  content_source?: 'rss' | 'scraped' | 'failed';
+  
+  // Error handling
+  error?: string;
+  should_skip?: boolean;
+}
+```
+
+### Processing Nodes
+
+#### 1. Preprocessing (`src/workflows/nodes/preprocess.ts`)
+- **Content Extraction**: Gets best available content from RSS
+- **Content Cleaning**: Removes HTML and formatting
+- **Length Validation**: Ensures minimum content length (50+ characters)
+- **Truncation**: Limits content to 4000 characters for AI processing
+
+#### 2. Analysis (`src/workflows/nodes/analyze.ts`)
+- **OpenAI Integration**: Uses GPT-4o for article analysis
+- **Prompt Engineering**: Specialized prompts for developer-focused content
+- **JSON Response**: Structured output with score, category, and summary
+- **Retry Logic**: Handles failures with improved prompts
+
+#### 3. Quality Check (`src/workflows/nodes/quality-check.ts`)
+- **Score Validation**: Ensures scores are between 1-10
+- **Summary Validation**: Checks length and content quality
+- **Category Validation**: Verifies valid category assignment
+- **Retry Trigger**: Initiates retry with enhanced prompts if needed
+
+#### 4. Content Scraping (`src/workflows/nodes/content-scraper.ts`)
+- **Puppeteer Integration**: Headless browser for full article content
+- **Readability Algorithm**: Mozilla Readability for clean text extraction
+- **Fallback Handling**: Uses RSS content if scraping fails
+- **Error Recovery**: Graceful degradation with detailed error logging
+
+## AI Analysis Process
+
+### Content Input
+The AI receives up to 4000 characters of cleaned article content:
+
+```typescript
+const truncatedContent = cleanedContent.substring(0, CONFIG.AI_CONTENT_MAX_LENGTH); // 4000 chars
+```
+
+### Analysis Prompt
+```typescript
+const INITIAL_ANALYSIS_PROMPT = `
+You are an AI news analyst for a software developer. Analyze the following article and provide a score from 1-10 on its relevance.
+
+Scoring Criteria:
+- High Score (8-10): Announce a new model, library, or tool; provide a technical tutorial.
+- Medium Score (5-7): Discuss benchmark comparisons, best practices.
+- Low Score (1-4): Focus on opinion, social commentary, or company funding.
+
+Article Content:
+{{CONTENT}}
+
+Your Response (JSON):
+{ "ai_score": <score_from_1_to_10>, "category": "<one of: 'New Tool', 'Tutorial', 'Research', 'Analysis', 'Opinion'>", "ai_summary": "<a one-sentence summary>" }
+`;
+```
+
+### OpenAI Configuration
+```typescript
+const response = await openai.chat.completions.create({
+  model: CONFIG.AI_MODEL, // 'gpt-4o'
+  messages: [{ role: 'user', content: prompt }],
+  temperature: 0.1,      // Low temperature for consistency
+  max_tokens: 1000       // Limit response length
+});
+```
+
+## Data Storage
+
+### Article Data Structure
+```typescript
+interface ArticleData {
+  // Core content
+  url: string;
+  title: string;
+  author: string;
+  rss_excerpt: string;        // Original RSS content
+  full_content_text: string;  // Scraped full article
+  
+  // Metadata
+  source_name: string;
+  published_at: Date;
+  fetched_at: Date;
+  
+  // AI Analysis
+  ai_summary: string;
+  ai_score: number;           // 1-10 relevance score
+  ai_category: string;
+  
+  // User interaction
+  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
+  rated_at?: Date;
+  is_read: boolean;
+  
+  // Content tracking
+  content_source: 'rss' | 'scraped' | 'failed';
+  scraping_status: 'pending' | 'success' | 'failed';
+  content_length: number;
+}
+```
+
+### Firebase Integration
+- **Document ID**: SHA-256 hash of article URL for deduplication
+- **Real-time Updates**: UI updates immediately when articles are saved
+- **Duplicate Prevention**: Existing articles are skipped during processing
+
+## Error Handling
+
+### Retry Logic
+- **Maximum Retries**: 3 attempts per article
+- **Enhanced Prompts**: Retry prompts include specific quality issues
+- **Quality Validation**: Each analysis result is validated before acceptance
+
+### Graceful Degradation
+- **Scraping Failures**: Fall back to RSS content
+- **API Failures**: Skip articles with detailed error logging
+- **Network Issues**: Exponential backoff for rate limiting
+
+### Logging System
+```typescript
+console.log(`✅ Successfully processed article: ${article.title}`);
+console.log(`⚠️ Skipping existing article: ${article.title}`);
+console.error(`❌ Error processing article: ${error.message}`);
+```
+
+## Performance Considerations
+
+### Rate Limiting
+- **OpenAI API**: Respects rate limits with exponential backoff
+- **Puppeteer**: Sequential processing to avoid overwhelming target sites
+- **Firebase**: Batch operations where possible
+
+### Resource Management
+- **Browser Cleanup**: Puppeteer instances are properly closed
+- **Memory Management**: Large content is truncated before processing
+- **Process Isolation**: Workflow runs in separate process via spawn
+
+## Configuration Integration
+
+### User Configuration
+The workflow requires user configuration for:
+- **OpenAI API Key**: For article analysis
+- **Firebase Config**: For data storage
+- **Topic Description**: For content filtering (future enhancement)
+
+### Runtime Validation
+```typescript
+if (!userConfig?.openai?.apiKey) {
+  return {
+    should_skip: true,
+    error: 'No OpenAI API key available in configuration'
+  };
+}
+```
+
+## Future Enhancements
+
+### Planned Features
+- **Topic Filtering**: Use topic description for pre-filtering articles
+- **Source Management**: Dynamic source configuration via UI
+- **Scheduling Options**: Optional automatic fetching with user-defined intervals
+- **Analytics**: Processing statistics and performance metrics
+- **Adaptive Learning**: User feedback integration for improved scoring

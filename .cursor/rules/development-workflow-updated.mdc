@@ -16,7 +16,7 @@ npm run build  # Compiles .ts files from src/ to dist/
 ```
 
 ### 2. Manual Asset Copying (Required)
-The TypeScript compiler only handles `.ts` files. Settings window assets must be copied manually:
+The TypeScript compiler only handles `.ts` files. Window assets must be copied manually:
 
 ```bash
 # Settings window assets
@@ -26,6 +26,10 @@ cp src/windows/settings.js dist/windows/
 # Topic settings window assets  
 cp src/windows/topic-settings.html dist/windows/
 cp src/windows/topic-settings.js dist/windows/
+
+# Trash window assets
+cp src/windows/trash.html dist/windows/
+cp src/windows/trash.js dist/windows/
 ```
 
 ### 3. Application Start
@@ -43,6 +47,8 @@ cp src/windows/settings.html dist/windows/
 cp src/windows/settings.js dist/windows/
 cp src/windows/topic-settings.html dist/windows/
 cp src/windows/topic-settings.js dist/windows/
+cp src/windows/trash.html dist/windows/
+cp src/windows/trash.js dist/windows/
 npm start
 ```
 
@@ -52,6 +58,11 @@ npm start
 - [src/main.ts](mdc:src/main.ts) - Main process with centralized IPC handlers
 - [src/config/user-config.ts](mdc:src/config/user-config.ts) - Schema-based configuration system
 - [src/windows/settings.js](mdc:src/windows/settings.js) - Refactored settings UI with helper functions
+
+### Window Components
+- [src/windows/settings.html](mdc:src/windows/settings.html) + [src/windows/settings.js](mdc:src/windows/settings.js) - API configuration
+- [src/windows/topic-settings.html](mdc:src/windows/topic-settings.html) + [src/windows/topic-settings.js](mdc:src/windows/topic-settings.js) - Topic filtering settings
+- [src/windows/trash.html](mdc:src/windows/trash.html) + [src/windows/trash.js](mdc:src/windows/trash.js) - Not relevant articles management
 
 ### Build Output Structure
 ```
@@ -65,9 +76,32 @@ dist/
 │   ├── settings-preload.js # Compiled from .ts
 │   ├── topic-settings.html # Copied manually
 │   ├── topic-settings.js   # Copied manually
-│   └── topic-settings-preload.js # Compiled from .ts
+│   ├── topic-settings-preload.js # Compiled from .ts
+│   ├── trash.html          # Copied manually
+│   ├── trash.js            # Copied manually
+│   └── trash-preload.js    # Compiled from .ts
 └── ...
 ```
+
+## Current Application Features
+
+### Main Interface
+- **Two-column layout**: Unrated articles (left) and Relevant articles (right)
+- **Manual workflow control**: "📰 Fetch Stories" button for on-demand article fetching
+- **Trash access**: "🗑️ Trash" button to view not relevant articles
+- **Settings access**: "⚙️ Settings" button for configuration
+
+### Window System
+- **Main Window**: Article browsing and rating interface
+- **Settings Window**: API configuration (Firebase + OpenAI) with live testing
+- **Topic Settings Window**: Topic description configuration for filtering
+- **Trash Window**: View and manage articles marked as "not relevant" with unrate functionality
+
+### Article Rating System
+- **Relevance-based**: Simple "Relevant" / "Not Relevant" rating system
+- **Unrate functionality**: Articles can be moved back to unrated from any rated state
+- **Real-time updates**: Firebase listeners provide instant UI updates
+- **Trash management**: Not relevant articles can be reviewed and unrated from trash window
 
 ## Testing Workflow
 
@@ -92,7 +126,14 @@ Settings windows now include live API testing:
 Test all window creation patterns:
 - Settings window (modal to main window)
 - Topic settings window (modal to main window)
+- Trash window (modal to main window)
 - Main window (with menu and workflow integration)
+
+### Workflow Testing
+- **Manual Fetch**: Test story fetching via UI button
+- **Article Processing**: Verify AI analysis and content scraping
+- **Rating System**: Test relevance rating and unrating functionality
+- **Real-time Updates**: Verify Firebase listeners update UI immediately
 
 ## Code Quality Checks
 
@@ -159,10 +200,10 @@ When extending configuration:
 
 ### Common Issues After Refactoring
 
-#### Settings Window Not Loading
-- **Symptom**: "ERR_FILE_NOT_FOUND" for settings.html
+#### Window Not Loading
+- **Symptom**: "ERR_FILE_NOT_FOUND" for window HTML files
 - **Cause**: Missing manual file copy step
-- **Solution**: Run the manual asset copying commands
+- **Solution**: Run the manual asset copying commands for all windows
 
 #### IPC Handler Not Found
 - **Symptom**: "No handler registered for 'handler-name'"
@@ -174,8 +215,13 @@ When extending configuration:
 - **Cause**: Configuration fails schema validation
 - **Solution**: Check `getConfigValidationErrors()` output
 
+#### Firebase Connection Issues
+- **Symptom**: "No Firebase App '[DEFAULT]' has been created"
+- **Cause**: Multiple Firebase instances or improper initialization
+- **Solution**: Ensure each window uses unique app names and proper Firebase instance management
+
 ### Development Tools
-- **DevTools**: Available in all windows during development
+- **DevTools**: Available in all windows during development (controlled by `APP_CONFIG.DEV_TOOLS_OPEN`)
 - **Console Logging**: Comprehensive error logging in all IPC handlers
 - **Type Checking**: Run `npx tsc --noEmit` for type validation
 
@@ -190,6 +236,7 @@ When extending configuration:
 - **Lazy Loading**: Dynamic imports for optional dependencies
 - **Resource Management**: Proper cleanup of window references
 - **Configuration Caching**: Configuration loaded once at startup
+- **Firebase Optimization**: Separate app instances prevent conflicts
 
 ## Distribution Building
 
@@ -206,7 +253,9 @@ Before distribution:
 2. Test all window creation
 3. Validate configuration system
 4. Test API connections
-5. Verify cross-platform compatibility
+5. Verify article rating and trash functionality
+6. Test manual workflow triggering
+7. Verify cross-platform compatibility
 
 ## Migration Notes
 
@@ -215,9 +264,11 @@ If migrating from pre-refactoring code:
 1. **IPC Handlers**: May need to update handler names/signatures
 2. **Window Creation**: Update to use factory pattern
 3. **Configuration**: Existing config files should work with new validation
-4. **Build Process**: Add manual asset copying step
+4. **Build Process**: Add manual asset copying step for all windows
+5. **Rating System**: Update from user_rating to relevance-based system
 
 ### Backward Compatibility
 - **Configuration Files**: Old config files are automatically migrated
 - **IPC Handlers**: Legacy handlers maintained for compatibility
 - **Window Behavior**: All existing functionality preserved
+- **Data Model**: Relevance system replaces complex rating system

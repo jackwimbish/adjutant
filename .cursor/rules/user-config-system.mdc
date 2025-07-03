@@ -31,14 +31,19 @@ interface UserConfig {
     apiKey: string;
   };
   firstRun: boolean;
+  appSettings: {
+    topicDescription: string;
+  };
 }
 ```
 
 ## Key Functions
 - `loadUserConfig()` - Load configuration from user data directory
 - `saveUserConfig(config)` - Save configuration to user data directory
-- `isConfigValid(config)` - Validate configuration structure
+- `isConfigValid(config)` - Validate configuration structure using Zod schema
+- `getConfigValidationErrors(config)` - Get detailed validation error messages
 - `getConfigPath()` - Get platform-specific config file path (works in both Electron and Node.js)
+- `configExists()` - Check if configuration file exists
 
 ## Security Principles
 1. **Runtime loading**: Configuration is loaded from user data directory at startup

@@ -1,0 +1,213 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Trash Management System
+
+## Overview
+The trash management system provides users with a dedicated interface to review and manage articles they've marked as "not relevant". This system allows users to reconsider their ratings and move articles back to the unrated state if needed.
+
+## Architecture
+
+### Window Components
+- **HTML**: [src/windows/trash.html](mdc:src/windows/trash.html) - Modern UI with scrollable article list
+- **JavaScript**: [src/windows/trash.js](mdc:src/windows/trash.js) - Firebase integration and article management
+- **Preload**: [src/windows/trash-preload.ts](mdc:src/windows/trash-preload.ts) - Secure IPC communication bridge
+
+### Window Configuration
+```typescript
+function createTrashWindow(): void {
+  trashWindow = createWindow({
+    width: 1000,
+    height: 800,
+    title: 'Trash - Not Relevant Articles',
+    htmlFile: 'windows/trash.html',
+    preloadFile: 'windows/trash-preload.js',
+    resizable: true,
+    modal: true,
+    parent: mainWindow || undefined,
+    showMenuBar: false,
+    onClosed: () => { trashWindow = null; }
+  });
+}
+```
+
+## Data Flow
+
+### Article Query
+The trash window queries Firebase for articles where `relevant === false`:
+
+```javascript
+const articlesRef = db.collection('articles').where('relevant', '==', false);
+```
+
+### Real-time Updates
+Uses Firebase onSnapshot listeners for immediate UI updates when articles are moved to/from trash.
+
+### Unrate Functionality
+Articles can be moved back to unrated state by updating:
+```javascript
+await db.collection('articles').doc(articleId).update({
+  relevant: null,
+  rated_at: null
+});
+```
+
+## User Interface
+
+### Main Features
+- **Article Count Display**: Shows number of articles in trash
+- **Scrollable List**: Handles large numbers of not relevant articles
+- **Article Cards**: Display title, summary, metadata, and unrate button
+- **Empty State**: Friendly message when trash is empty
+- **Loading States**: Visual feedback during operations
+
+### Article Information Displayed
+- Article title and AI-generated summary
+- Source name and publication date
+- When the article was marked as not relevant
+- AI relevance score and content source indicator
+- Link to read full article
+
+### Unrate Button
+- **Orange styling** to distinguish from other rating buttons
+- **Loading states**: Shows "⏳ Unrating..." during operation
+- **Success feedback**: Shows "✅ Unrated" before article removal
+- **Error handling**: Shows "❌ Error - Try Again" with auto-restore
+
+## Firebase Integration
+
+### Unique App Instance
+The trash window creates its own Firebase app to prevent conflicts:
+
+```javascript
+// Initialize with unique name
+const app = firebase.initializeApp(config, 'trash-app');
+const db = firebase.firestore(app);
+
+// Later access in same window
+const app = firebase.app('trash-app');
+const db = firebase.firestore(app);
+```
+
+### Dynamic SDK Loading
+Firebase SDK is loaded dynamically to avoid conflicts:
+
+```javascript
+const scripts = [
+  'https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js'
+];
+```
+
+## Access Methods
+
+### Menu Integration
+- **Menu Item**: "Trash..." in main application menu
+- **Keyboard Shortcut**: `Cmd+T` (or `Ctrl+T` on Windows/Linux)
+- **Focus Behavior**: Brings existing window to front if already open
+
+### Main Interface Button
+- **Button**: "🗑️ Trash" in main window header
+- **Styling**: Red color scheme to match trash concept
+- **Positioning**: Between "Fetch Stories" and "Settings" buttons
+
+### IPC Communication
+```typescript
+// Preload script exposure
+contextBridge.exposeInMainWorld('trashAPI', {
+  closeWindow: () => ipcRenderer.send('trash:close-window'),
+  getFirebaseConfig: () => ipcRenderer.invoke('get-firebase-config'),
+});
+
+// Main process handlers
+ipcMain.on('trash:close-window', () => {
+  if (trashWindow && !trashWindow.isDestroyed()) {
+    trashWindow.close();
+  }
+});
+
+ipcMain.on('open-trash', () => {
+  if (!trashWindow || trashWindow.isDestroyed()) {
+    createTrashWindow();
+  } else {
+    trashWindow.focus();
+  }
+});
+```
+
+## Error Handling
+
+### Common Issues and Solutions
+
+#### Firebase Connection Errors
+- **Issue**: "No Firebase App '[DEFAULT]' has been created"
+- **Cause**: Improper Firebase instance management
+- **Solution**: Use unique app names (`'trash-app'`) and proper instance references
+
+#### Configuration Not Available
+- **Issue**: Firebase config not accessible
+- **Cause**: IPC handler not properly set up
+- **Solution**: Verify `get-firebase-config` handler is registered
+
+#### Article ID Generation
+- **Issue**: Unrate operation fails
+- **Cause**: Incorrect article ID hashing
+- **Solution**: Use same SHA-256 URL hashing as main workflow
+
+### Error Recovery
+- **Button State Recovery**: Failed operations restore original button text after 3 seconds
+- **Loading State Management**: All async operations include proper loading/success/error states
+- **Graceful Degradation**: Missing data shows placeholder text instead of crashing
+
+## Styling and UX
+
+### Design Language
+- **Dark Theme**: Matches main application styling
+- **Glass Morphism**: Translucent containers with backdrop blur
+- **Consistent Colors**: Uses same color variables as main interface
+- **Smooth Animations**: 0.3s transitions for state changes
+
+### Responsive Elements
+- **Scrollable Container**: Max height with custom scrollbar styling
+- **Article Cards**: Hover effects and proper spacing
+- **Button States**: Visual feedback for all interactive elements
+- **Empty State**: Centered content with emoji and helpful text
+
+### Animation Patterns
+```css
+.article.removing {
+  opacity: 0;
+  transform: translateX(-20px);
+  margin-bottom: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+```
+
+## Development Considerations
+
+### Build Process
+The trash window requires manual asset copying during development:
+
+```bash
+cp src/windows/trash.html dist/windows/
+cp src/windows/trash.js dist/windows/
+```
+
+### Testing Checklist
+1. **Window Creation**: Verify trash window opens correctly
+2. **Article Loading**: Confirm not relevant articles are displayed
+3. **Unrate Functionality**: Test moving articles back to unrated
+4. **Real-time Updates**: Verify immediate UI updates
+5. **Error Handling**: Test with network issues and invalid data
+6. **Performance**: Test with large numbers of articles
+7. **Cross-platform**: Verify keyboard shortcuts and styling
+
+### Future Enhancements
+- **Bulk Operations**: Select multiple articles for batch unrating
+- **Search/Filter**: Find specific articles in trash
+- **Permanent Delete**: Option to permanently remove articles
+- **Trash Analytics**: Statistics on rating patterns
+- **Export Functionality**: Export not relevant articles for analysis
