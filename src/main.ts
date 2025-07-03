@@ -18,6 +18,67 @@ let topicSettingsWindow: BrowserWindow | null = null;
 let trashWindow: BrowserWindow | null = null;
 let userConfig: UserConfig | null = null;
 
+// Window registry for data-driven window management
+const windowRegistry = new Map<string, BrowserWindow | null>([
+  ['main', null],
+  ['settings', null],
+  ['topic-settings', null],
+  ['trash', null],
+]);
+
+// Window definitions configuration
+interface WindowDefinition extends WindowConfig {
+  id: string;
+  menu?: {
+    label: string;
+    accelerator?: string;
+  };
+}
+
+const windowDefinitions: WindowDefinition[] = [
+  {
+    id: 'settings',
+    width: 700,
+    height: 800,
+    title: 'Adjutant Settings',
+    htmlFile: 'windows/settings.html',
+    preloadFile: 'windows/settings-preload.js',
+    resizable: false,
+    modal: true,
+    showMenuBar: false,
+    menu: {
+      label: 'Settings...',
+      accelerator: 'CmdOrCtrl+,',
+    },
+  },
+  {
+    id: 'topic-settings',
+    width: 600,
+    height: 700,
+    title: 'Topic Settings - Adjutant',
+    htmlFile: 'windows/topic-settings.html',
+    preloadFile: 'windows/topic-settings-preload.js',
+    resizable: false,
+    modal: true,
+    showMenuBar: false,
+  },
+  {
+    id: 'trash',
+    width: 1000,
+    height: 800,
+    title: 'Trash - Not Relevant Articles',
+    htmlFile: 'windows/trash.html',
+    preloadFile: 'windows/trash-preload.js',
+    resizable: true,
+    modal: true,
+    showMenuBar: false,
+    menu: {
+      label: 'Trash...',
+      accelerator: 'CmdOrCtrl+T',
+    },
+  },
+];
+
 // ============================================================================
 // IPC HANDLERS
 // ============================================================================
@@ -158,45 +219,25 @@ function setupApiTestHandlers(): void {
  */
 function setupWindowHandlers(): void {
   ipcMain.on('settings:close-window', () => {
-    if (settingsWindow && !settingsWindow.isDestroyed()) {
-      settingsWindow.close();
-    }
+    closeWindow('settings');
   });
 
   ipcMain.on('settings:open-topic-settings', () => {
-    if (settingsWindow && !settingsWindow.isDestroyed()) {
-      settingsWindow.close();
-    }
-    if (!topicSettingsWindow || topicSettingsWindow.isDestroyed()) {
-      createTopicSettingsWindow();
-    } else {
-      topicSettingsWindow.focus();
-    }
+    closeWindow('settings');
+    openWindow('topic-settings');
   });
 
   ipcMain.on('close-settings', () => {
-    if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
-      topicSettingsWindow.close();
-    }
+    closeWindow('topic-settings');
   });
 
   ipcMain.on('open-api-settings', () => {
-    if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
-      topicSettingsWindow.close();
-    }
-    if (!settingsWindow || settingsWindow.isDestroyed()) {
-      createSettingsWindow();
-    } else {
-      settingsWindow.focus();
-    }
+    closeWindow('topic-settings');
+    openWindow('settings');
   });
 
   ipcMain.on('open-settings', () => {
-    if (!settingsWindow || settingsWindow.isDestroyed()) {
-      createSettingsWindow();
-    } else {
-      settingsWindow.focus();
-    }
+    openWindow('settings');
   });
 
   ipcMain.handle('workflow:fetch-stories', async () => {
@@ -217,17 +258,11 @@ function setupWindowHandlers(): void {
   });
 
   ipcMain.on('trash:close-window', () => {
-    if (trashWindow && !trashWindow.isDestroyed()) {
-      trashWindow.close();
-    }
+    closeWindow('trash');
   });
 
   ipcMain.on('open-trash', () => {
-    if (!trashWindow || trashWindow.isDestroyed()) {
-      createTrashWindow();
-    } else {
-      trashWindow.focus();
-    }
+    openWindow('trash');
   });
 }
 
@@ -315,58 +350,82 @@ function createWindow(config: WindowConfig): BrowserWindow {
   return window;
 }
 
-// Function to create settings window
+/**
+ * Generic function to open a window by ID
+ * @param windowId - The ID of the window to open
+ */
+function openWindow(windowId: string): void {
+  const windowDef = windowDefinitions.find(def => def.id === windowId);
+  if (!windowDef) {
+    console.error(`Window definition not found for ID: ${windowId}`);
+    return;
+  }
+
+  const existingWindow = windowRegistry.get(windowId);
+  if (existingWindow && !existingWindow.isDestroyed()) {
+    existingWindow.focus();
+    return;
+  }
+
+  // Create window config with parent set to main window if modal
+  const config: WindowConfig = {
+    ...windowDef,
+    parent: windowDef.modal ? mainWindow || undefined : undefined,
+    onClosed: () => {
+      windowRegistry.set(windowId, null);
+      // Update legacy references for backward compatibility
+      updateLegacyWindowReferences(windowId, null);
+    },
+  };
+
+  const newWindow = createWindow(config);
+  windowRegistry.set(windowId, newWindow);
+  
+  // Update legacy references for backward compatibility
+  updateLegacyWindowReferences(windowId, newWindow);
+}
+
+/**
+ * Update legacy window references for backward compatibility
+ * @param windowId - The window ID
+ * @param window - The window instance or null
+ */
+function updateLegacyWindowReferences(windowId: string, window: BrowserWindow | null): void {
+  switch (windowId) {
+    case 'settings':
+      settingsWindow = window;
+      break;
+    case 'topic-settings':
+      topicSettingsWindow = window;
+      break;
+    case 'trash':
+      trashWindow = window;
+      break;
+  }
+}
+
+/**
+ * Close a window by ID
+ * @param windowId - The ID of the window to close
+ */
+function closeWindow(windowId: string): void {
+  const window = windowRegistry.get(windowId);
+  if (window && !window.isDestroyed()) {
+    window.close();
+  }
+}
+
+// Legacy window creation functions (now using generic openWindow)
 function createSettingsWindow(): void {
-  settingsWindow = createWindow({
-    width: 700,
-    height: 800,
-    title: 'Adjutant Settings',
-    htmlFile: 'windows/settings.html',
-    preloadFile: 'windows/settings-preload.js',
-    resizable: false,
-    modal: true,
-    parent: mainWindow || undefined,
-    showMenuBar: false,
-    onClosed: () => {
-      settingsWindow = null;
-    },
-  });
+  openWindow('settings');
 }
 
-// Function to create topic settings window
 function createTopicSettingsWindow(): void {
-  topicSettingsWindow = createWindow({
-    width: 600,
-    height: 700,
-    title: 'Topic Settings - Adjutant',
-    htmlFile: 'windows/topic-settings.html',
-    preloadFile: 'windows/topic-settings-preload.js',
-    resizable: false,
-    modal: true,
-    parent: mainWindow || undefined,
-    showMenuBar: false,
-    onClosed: () => {
-      topicSettingsWindow = null;
-    },
-  });
+  openWindow('topic-settings');
 }
 
-// Function to create trash window
 function createTrashWindow(): void {
-  trashWindow = createWindow({
-    width: 1000,
-    height: 800,
-    title: 'Trash - Not Relevant Articles',
-    htmlFile: 'windows/trash.html',
-    preloadFile: 'windows/trash-preload.js',
-    resizable: true,
-    modal: true,
-    parent: mainWindow || undefined,
-    showMenuBar: false,
-    onClosed: () => {
-      trashWindow = null;
-    },
-  });
+  openWindow('trash');
 }
 
 // Function to create the main application window
@@ -379,42 +438,34 @@ function createMainWindow(): void {
     preloadFile: 'preload.js',
     onClosed: () => {
       mainWindow = null;
+      windowRegistry.set('main', null);
     },
     postCreate: (window) => {
       // Create application menu for main window
       createApplicationMenu();
     },
   });
+  
+  // Update the registry
+  windowRegistry.set('main', mainWindow);
 }
 
 // Function to create application menu
 function createApplicationMenu(): void {
+  // Build dynamic menu items from window definitions
+  const dynamicMenuItems: Electron.MenuItemConstructorOptions[] = windowDefinitions
+    .filter(def => def.menu) // Only include windows with menu definitions
+    .map(def => ({
+      label: def.menu!.label,
+      accelerator: def.menu!.accelerator,
+      click: () => openWindow(def.id),
+    }));
+
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'Adjutant',
       submenu: [
-        {
-          label: 'Settings...',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => {
-            if (!settingsWindow || settingsWindow.isDestroyed()) {
-              createSettingsWindow();
-            } else {
-              settingsWindow.focus();
-            }
-          }
-        },
-        {
-          label: 'Trash...',
-          accelerator: 'CmdOrCtrl+T',
-          click: () => {
-            if (!trashWindow || trashWindow.isDestroyed()) {
-              createTrashWindow();
-            } else {
-              trashWindow.focus();
-            }
-          }
-        },
+        ...dynamicMenuItems,
         { type: 'separator' },
         {
           label: 'Show Config Location',
@@ -510,11 +561,12 @@ async function initializeApp(): Promise<void> {
     console.log('No valid configuration found or first run - showing settings window');
     
     // Show settings window first
-    createSettingsWindow();
+    openWindow('settings');
     
     // Wait for settings to be configured before continuing
     return new Promise((resolve) => {
       const checkConfig = () => {
+        const settingsWindow = windowRegistry.get('settings');
         if (settingsWindow && settingsWindow.isDestroyed()) {
           // Settings window was closed, check if we have config now
           userConfig = loadUserConfig();
@@ -562,7 +614,7 @@ app.whenReady().then(async () => {
       if (userConfig && isConfigValid(userConfig)) {
         createMainWindow();
       } else {
-        createSettingsWindow();
+        openWindow('settings');
       }
     }
   });
