@@ -211,11 +211,6 @@
         }
         
         /* Settings button styles */
-        .header-controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
         .header-content {
             flex: 1;
         }
@@ -244,6 +239,58 @@
         .settings-btn:active {
             transform: translateY(0);
         }
+        
+        /* Fetch stories button styles */
+        .fetch-btn {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: #4CAF50;
+            border: 1px solid #4CAF50;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+            margin-right: 10px;
+        }
+        .fetch-btn:hover {
+            background-color: #4CAF50;
+            color: var(--background-color);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+        .fetch-btn:active {
+            transform: translateY(0);
+        }
+        .fetch-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .fetch-btn:disabled:hover {
+            background-color: var(--primary-color);
+            color: #4CAF50;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Header controls layout */
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
     </style>
 </head>
 <body>
@@ -254,9 +301,14 @@
                 <h1>Adjutant</h1>
                 <p style="margin: 5px 0 0 0; opacity: 0.7; font-size: 0.9em;">Personal News Intelligence Dashboard</p>
             </div>
-            <button id="settings-btn" class="settings-btn">
-                ⚙️ Settings
-            </button>
+            <div class="header-buttons">
+                <button id="fetch-btn" class="fetch-btn">
+                    📰 Fetch Stories
+                </button>
+                <button id="settings-btn" class="settings-btn">
+                    ⚙️ Settings
+                </button>
+            </div>
         </div>
     </header>
 
@@ -328,17 +380,72 @@
                 });
             }
         }
+
+        // Add fetch stories button click handler
+        function setupFetchButton() {
+            const fetchBtn = document.getElementById('fetch-btn');
+            if (fetchBtn) {
+                fetchBtn.addEventListener('click', async () => {
+                    console.log('HTML: Fetch Stories button clicked');
+                    
+                    if (!window.electronAPI || !window.electronAPI.fetchStories) {
+                        console.error('HTML: electronAPI.fetchStories not available');
+                        return;
+                    }
+
+                    // Disable button and show loading state
+                    fetchBtn.disabled = true;
+                    const originalText = fetchBtn.textContent;
+                    fetchBtn.textContent = '⏳ Fetching Stories...';
+
+                    try {
+                        const result = await window.electronAPI.fetchStories();
+                        
+                        if (result.success) {
+                            console.log('HTML: Stories fetch started successfully');
+                            fetchBtn.textContent = '✅ Stories Fetching...';
+                            
+                            // Reset button after a few seconds
+                            setTimeout(() => {
+                                fetchBtn.textContent = originalText;
+                                fetchBtn.disabled = false;
+                            }, 3000);
+                        } else {
+                            console.error('HTML: Failed to fetch stories:', result.message);
+                            fetchBtn.textContent = '❌ Fetch Failed';
+                            
+                            // Reset button after showing error
+                            setTimeout(() => {
+                                fetchBtn.textContent = originalText;
+                                fetchBtn.disabled = false;
+                            }, 2000);
+                        }
+                    } catch (error) {
+                        console.error('HTML: Error fetching stories:', error);
+                        fetchBtn.textContent = '❌ Error';
+                        
+                        // Reset button after showing error
+                        setTimeout(() => {
+                            fetchBtn.textContent = originalText;
+                            fetchBtn.disabled = false;
+                        }, 2000);
+                    }
+                });
+            }
+        }
         
         // Start when page loads
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 console.log('HTML: DOMContentLoaded fired');
                 setupSettingsButton();
+                setupFetchButton();
                 loadRendererWithConfig();
             });
         } else {
             console.log('HTML: DOM already ready');
             setupSettingsButton();
+            setupFetchButton();
             loadRendererWithConfig();
         }
     </script>

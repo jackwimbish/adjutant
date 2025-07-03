@@ -197,6 +197,23 @@ function setupWindowHandlers(): void {
       settingsWindow.focus();
     }
   });
+
+  ipcMain.handle('workflow:fetch-stories', async () => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot fetch stories - no user configuration');
+        return { success: false, message: 'No user configuration available' };
+      }
+
+      console.log('Manual workflow triggered by user');
+      startWorkflow();
+      
+      return { success: true, message: 'Story fetching started successfully' };
+    } catch (error) {
+      console.error('Error starting workflow:', error);
+      return { success: false, message: 'Failed to start story fetching' };
+    }
+  });
 }
 
 /**
@@ -460,7 +477,6 @@ async function initializeApp(): Promise<void> {
           if (userConfig && isConfigValid(userConfig)) {
             console.log('Configuration completed, starting main application');
             createMainWindow();
-            startWorkflow();
             resolve();
           } else {
             console.log('No valid configuration, exiting application');
@@ -478,22 +494,18 @@ async function initializeApp(): Promise<void> {
   } else {
     console.log('Valid configuration found, starting main application');
     createMainWindow();
-    startWorkflow();
   }
 }
 
-// Function to start the workflow system
+// Function to start the workflow system (now manual only)
 function startWorkflow(): void {
   if (!userConfig) {
     console.error('Cannot start workflow - no user configuration');
     return;
   }
 
-  // Run the workflow immediately on app start
+  // Run the workflow manually (no automatic scheduling)
   runWorkflow();
-
-  // Then, run the workflow on a schedule
-  setInterval(runWorkflow, APP_CONFIG.WORKFLOW_INTERVAL_MS);
 }
 
 // This method will be called when Electron has finished initialization
