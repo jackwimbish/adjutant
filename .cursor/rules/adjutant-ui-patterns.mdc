@@ -115,20 +115,63 @@ const db = firebase.firestore(app);
 
 ## Dynamic UI Updates
 
-### Real-time Button Visibility
-Buttons appear/disappear based on application state:
-- **Generate Profile**: Visible when threshold met (2+2 ratings)
-- **Profile Management**: Visible when profile exists
-- **Trash**: Always visible when configured
+### Always-Visible Button Pattern
+Buttons are now always visible but disabled when conditions aren't met, providing better UX clarity:
+
+```javascript
+// Button state management with disabled states
+function checkProfileThreshold() {
+    const generateProfileBtn = document.getElementById('generateProfileBtn');
+    
+    if (hasEnoughRatings) {
+        generateProfileBtn.disabled = false;
+        generateProfileBtn.title = "Generate your personalized profile";
+    } else {
+        generateProfileBtn.disabled = true;
+        generateProfileBtn.title = "Disabled: Need at least 2 relevant and 2 not relevant ratings";
+    }
+}
+
+function checkProfileExists() {
+    const profileBtn = document.getElementById('profileBtn');
+    
+    if (profileExists) {
+        profileBtn.disabled = false;
+        profileBtn.title = "Manage your profile preferences";
+    } else {
+        profileBtn.disabled = true;
+        profileBtn.title = "Disabled: No profile available";
+    }
+}
+```
+
+### Button States and Tooltips
+- **Insufficient Ratings**: Both buttons visible but disabled with helpful tooltips
+- **Sufficient Ratings, No Profile**: Generate Profile enabled, Profile Management disabled
+- **Profile Exists**: Both buttons enabled
+- **Click Protection**: Disabled buttons prevent event handling
+
+### Click Protection Pattern
+```javascript
+generateProfileBtn.addEventListener('click', (e) => {
+    if (generateProfileBtn.disabled) {
+        e.preventDefault();
+        return;
+    }
+    // Handle profile generation
+});
+```
 
 ### State Checking Functions
 ```javascript
 function checkProfileThreshold() {
   // Check if user has enough ratings for profile generation
+  // Enable/disable Generate Profile button with tooltip
 }
 
 function checkProfileExists() {
   // Check if user profile exists for management
+  // Enable/disable Profile Management button with tooltip
 }
 ```
 

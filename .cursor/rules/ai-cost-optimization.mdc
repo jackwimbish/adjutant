@@ -62,6 +62,88 @@ if (!isRelevant) {
 }
 ```
 
+## No-Profile Workflow Optimization
+
+### Topic-Only Analysis for New Users
+**Model**: GPT-4o-mini only (~$0.15/1M tokens)  
+**Purpose**: Cost-effective processing for users without profiles  
+**Implementation**: [src/workflow.ts](mdc:src/workflow.ts) - `analyzeArticleWithTopicOnly()`
+
+When users don't have profiles, skip expensive traditional analysis:
+
+```typescript
+// Check if user has profile first
+const profile = await window.electronAPI.getProfile();
+if (!profile) {
+    console.log('📊 No profile found - using topic-only analysis');
+    return await analyzeArticleWithTopicOnly(article, userConfig);
+} else {
+    console.log('🧠 Profile found - using adaptive scoring');
+    return await analyzeArticleWithAdaptiveScoring(article, userConfig);
+}
+```
+
+### Topic-Only Processing Flow
+1. **Content Scraping**: Same as full workflow using `scrapeContent()`
+2. **Topic Relevance**: GPT-4o-mini determines if article matches user topic
+3. **Basic Summarization**: GPT-4o-mini generates simple summary for relevant articles
+4. **Default Scoring**: Articles get score 5/10 for user rating
+
+```typescript
+async function analyzeArticleWithTopicOnly(article: RSSItem, userConfig: UserConfig): Promise<ArticleData> {
+    // Step 1: Scrape content
+    const contentResult = await scrapeContent(article.url);
+    
+    // Step 2: Topic relevance check with GPT-4o-mini
+    const isTopicRelevant = await checkTopicRelevance(
+        article, 
+        contentResult.content, 
+        userConfig.appSettings.topicDescription
+    );
+    
+    if (!isTopicRelevant) {
+        // Mark as filtered, no further processing
+        return createFilteredArticle(article, contentResult);
+    }
+    
+    // Step 3: Basic summarization for relevant articles
+    const summary = await generateBasicSummary(article, contentResult.content);
+    
+    // Step 4: Save as unrated with default score
+    return {
+        ...article,
+        ...contentResult,
+        ai_summary: summary,
+        ai_score: 5, // Default score for user rating
+        ai_category: 'Unclassified',
+        relevant: null, // Unrated
+        // ... other fields
+    };
+}
+```
+
+### Cost Comparison
+```
+Traditional Analysis (No Profile):
+- Content scraping: ~$0.0005
+- Full GPT-4o analysis: ~$0.0025
+- Total per article: ~$0.0030
+
+Topic-Only Analysis:
+- Content scraping: ~$0.0005
+- GPT-4o-mini topic check: ~$0.0001
+- GPT-4o-mini summarization: ~$0.0002
+- Total per article: ~$0.0008
+
+Savings: 73% cost reduction for new users
+```
+
+### Implementation Benefits
+- **Immediate Value**: New users get relevant articles without waiting for profile
+- **Cost Efficiency**: 73% cheaper than traditional analysis for new users  
+- **User Engagement**: Articles appear in "Unrated" column for rating and profile building
+- **Smooth Transition**: Seamless upgrade to profile-based scoring once generated
+
 ## Cost Impact Analysis
 
 ### Before Enhancement

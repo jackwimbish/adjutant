@@ -6,7 +6,7 @@ alwaysApply: false
 # Profile Management System - Manual Editing
 
 ## Overview
-The profile management system allows users to manually edit their preferences (likes/dislikes) through a sophisticated UI with local staging, validation, and direct Firebase updates.
+The profile management system allows users to manually edit their preferences (likes/dislikes) through a sophisticated UI with local staging, validation, and direct Firebase updates. The system uses always-visible buttons with disabled states for better UX clarity.
 
 ## Architecture Components
 
@@ -133,6 +133,52 @@ await updateDoc(profileRef, updateData);
 - **Content Validation**: Check each preference meets requirements
 - **Firebase Errors**: Proper error propagation and user feedback
 
+## Button Visibility System
+
+### Always-Visible Button Pattern
+Buttons are always visible but disabled when conditions aren't met:
+
+```javascript
+// Button state management in main window
+function checkProfileThreshold() {
+    // Enable/disable Generate Profile button
+    if (hasEnoughRatings) {
+        generateProfileBtn.disabled = false;
+        generateProfileBtn.title = "Generate your personalized profile";
+    } else {
+        generateProfileBtn.disabled = true;
+        generateProfileBtn.title = "Disabled: Need at least 2 relevant and 2 not relevant ratings";
+    }
+}
+
+function checkProfileExists() {
+    // Enable/disable Profile Management button
+    if (profileExists) {
+        profileBtn.disabled = false;
+        profileBtn.title = "Manage your profile preferences";
+    } else {
+        profileBtn.disabled = true;
+        profileBtn.title = "Disabled: No profile available";
+    }
+}
+```
+
+### Button States
+- **Insufficient Ratings**: Both buttons visible but disabled with helpful tooltips
+- **Sufficient Ratings, No Profile**: Generate Profile enabled, Profile Management disabled
+- **Profile Exists**: Both buttons enabled
+
+### Click Protection
+```javascript
+generateProfileBtn.addEventListener('click', (e) => {
+    if (generateProfileBtn.disabled) {
+        e.preventDefault();
+        return;
+    }
+    // Handle profile generation
+});
+```
+
 ## Development Notes
 
 ### Asset Management
@@ -145,3 +191,4 @@ await updateDoc(profileRef, updateData);
 - **Data Safety**: Multiple layers of unsaved change protection
 - **Performance**: No AI costs for manual edits - direct Firebase updates
 - **Accessibility**: Enter key support, clear labels, proper focus management
+- **Button Clarity**: Always-visible buttons with clear disabled states and tooltips

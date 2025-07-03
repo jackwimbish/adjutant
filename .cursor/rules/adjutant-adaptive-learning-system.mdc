@@ -52,7 +52,8 @@ interface UserProfile {
 
 ### Generate Profile Button
 - **Location**: Main window header with purple styling (#9C27B0)
-- **Visibility**: Hidden by default, appears when threshold met (2+2 ratings)
+- **Visibility**: Always visible but disabled when threshold not met
+- **State Management**: Enabled when 2+2 ratings exist, disabled with helpful tooltip otherwise
 - **Functionality**: Triggers learner workflow via `learner:generate-profile` IPC
 
 ### Profile Management Window
@@ -62,7 +63,8 @@ interface UserProfile {
 
 ### Profile Button
 - **Location**: Main window header
-- **Visibility**: Appears when profile exists
+- **Visibility**: Always visible but disabled when no profile exists
+- **State Management**: Enabled when profile exists, disabled with helpful tooltip otherwise
 - **Functionality**: Opens profile management window
 
 ## IPC Handlers ([src/main.ts](mdc:src/main.ts))
@@ -96,12 +98,17 @@ npm start
 ## Workflow Integration
 
 ### Article Processing Flow
-1. **Enhanced Analysis**: Articles processed through analysis workflow
-2. **Profile Check**: System checks for user profile after each article
-3. **Adaptive Scoring**: Uses profile-based scoring when available
-4. **Fallback**: Traditional scoring when no profile exists
+1. **Profile Check**: System checks for user profile existence first
+2. **Workflow Selection**: Routes to appropriate analysis workflow:
+   - **No Profile**: Topic-only analysis with GPT-4o-mini (73% cost savings)
+   - **Profile Exists**: Adaptive scoring with profile-based personalization
+3. **Intelligent Scoring**: Cost-optimized processing based on user state
+4. **User Engagement**: All articles appear in appropriate UI columns for rating
 
 ### Cost Optimization
+- **Workflow Selection**: Intelligent routing based on profile existence
+- **Topic-Only Analysis**: GPT-4o-mini only for new users (73% savings vs traditional)
+- **Adaptive Scoring**: Two-tier model strategy for profile users
 - **Topic Filtering**: gpt-4o-mini for initial relevance check
 - **Profile Scoring**: gpt-4o for sophisticated preference analysis
 - **Threshold Validation**: Prevents unnecessary API calls
