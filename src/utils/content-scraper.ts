@@ -58,7 +58,45 @@ export async function scrapeArticleContent(url: string): Promise<ScrapedContent>
     const html = await page.content();
     
     // Use Mozilla Readability to extract clean content
-    const dom = new JSDOM(html, { url });
+    // Configure JSDOM to handle modern web pages gracefully
+    const virtualConsole = new (require('jsdom').VirtualConsole)();
+    
+    // Suppress all console output to avoid noise from website scripts
+    virtualConsole.on('error', (error: Error) => {
+      // Only log actual parsing errors, not script errors
+      if (error.message && !error.message.includes('fetch is not defined') && 
+          !error.message.includes('IntersectionObserver') &&
+          !error.message.includes('Could not parse CSS')) {
+        console.error('JSDOM Error:', error.message);
+      }
+    });
+    
+    const dom = new JSDOM(html, { 
+      url,
+      resources: 'usable',
+      runScripts: 'outside-only', // Don't run scripts to avoid API errors
+      pretendToBeVisual: true,
+      virtualConsole
+    });
+    
+    // Add polyfills for missing browser APIs to prevent script errors
+    if (dom.window) {
+      // Add fetch polyfill
+      if (!dom.window.fetch) {
+        dom.window.fetch = () => Promise.reject(new Error('fetch not available'));
+      }
+      
+      // Add IntersectionObserver polyfill
+      if (!dom.window.IntersectionObserver) {
+        dom.window.IntersectionObserver = class {
+          constructor() {}
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+        };
+      }
+    }
+    
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
     

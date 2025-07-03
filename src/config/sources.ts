@@ -15,5 +15,10 @@ export const DEFAULT_SOURCES: NewsSource[] = [
     url: 'https://huggingface.co/blog/feed.xml', 
     type: 'RSS' 
   },
+  { 
+    name: 'Google DeepMind Blog', 
+    url: 'https://blog.google/technology/google-deepmind/rss/', 
+    type: 'RSS' 
+  },
   // Future sources can be added here
 ]; 

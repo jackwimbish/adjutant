@@ -50,8 +50,8 @@ async function fetchArticlesFromSource(source: NewsSource): Promise<RSSItem[]> {
       item.link && item.title
     ) as RSSItem[];
     
-    // Limit to first 20 articles to avoid processing too many at once
-    const MAX_ARTICLES_PER_FEED = 20;
+    // Limit to first 10 articles to avoid processing too many at once
+    const MAX_ARTICLES_PER_FEED = 10;
     const limitedArticles = articlesWithLink.slice(0, MAX_ARTICLES_PER_FEED);
     
     console.log(`Found ${articlesWithLink.length} articles with links, processing first ${limitedArticles.length}`);
