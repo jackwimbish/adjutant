@@ -29,9 +29,17 @@ The learning algorithm operates in distinct phases:
   ```
 
 ### Article Data Enhancement
-- Existing `ArticleData` interface remains unchanged
+- Existing `ArticleData` interface enhanced with optimization fields
 - Articles without profiles are stored with `ai_score: null`
 - Articles with profile-based scoring get `ai_score: 1-10`
+- New optimization fields prevent re-processing:
+  ```typescript
+  interface ArticleData {
+    // ... existing fields ...
+    topic_filtered?: boolean;     // True if filtered out by topic check
+    topic_filtered_at?: Date;     // When topic filtering occurred
+  }
+  ```
 
 ## 1. The Preference Profile Generation Workflow (The "Learner")
 
