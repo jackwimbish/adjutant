@@ -1,0 +1,105 @@
+# Refactor Candidates for Adjutant (4)
+
+This document outlines potential refactoring opportunities within the `src` directory to improve code quality, maintainability, and simplicity.
+
+---
+
+## 1. `src/main.ts`: Window Management System ✅ **COMPLETED**
+
+### Observation
+The current window management in `src/main.ts` uses a mix of patterns, leading to complexity and boilerplate code. It includes:
+- Legacy global variables for each window (`mainWindow`, `settingsWindow`).
+- A modern `windowRegistry` map.
+- Data-driven `windowDefinitions`.
+- Redundant creator functions (`createSettingsWindow`, etc.).
+- A "sync" function (`updateLegacyWindowReferences`) to bridge the old and new systems.
+
+This hybrid approach suggests an incomplete transition to a more robust, centralized pattern.
+
+### Proposed Refactor
+1.  **Fully Adopt the Registry Pattern**: Remove the legacy global window variables and the `updateLegacyWindowReferences` function. The `windowRegistry` should be the single source of truth for all window instances.
+2.  **Centralize Window Creation**: Eliminate the separate `create...Window` functions. The generic `openWindow(windowId)` function should be used exclusively, leveraging the `windowDefinitions` array to configure and create new windows.
+3.  **Update Call Sites**: Replace all calls to the specific `create...Window` functions with `openWindow(windowId)`. For example, `createSettingsWindow()` becomes `openWindow('settings')`.
+
+### Implementation Results ✅
+**Completed**: This refactor has been successfully implemented with the following changes:
+
+1. **Removed Legacy Variables**: Eliminated `settingsWindow`, `topicSettingsWindow`, and `trashWindow` global variables
+2. **Updated Registry Usage**: All window references now use `windowRegistry.get(windowId)` pattern
+3. **Removed Legacy Functions**: Deleted `createSettingsWindow()`, `createTopicSettingsWindow()`, `createTrashWindow()`, and `updateLegacyWindowReferences()`
+4. **Unified Main Window**: Added main window to `windowDefinitions` and updated `createMainWindow()` to use the same pattern
+5. **Maintained Functionality**: All existing window behavior preserved, including modal relationships and menu integration
+
+**Benefits Achieved**:
+- **Simplification**: Reduced boilerplate code by ~50 lines and eliminated duplicate window management logic
+- **Maintainability**: All window configuration now centralized in `windowDefinitions` array
+- **Clarity**: Single, consistent pattern for all window management operations
+- **Type Safety**: Maintained full TypeScript compliance with no compilation errors
+
+---
+
+## 2. `src/renderer.ts`: Main Window UI Logic
+
+### Observation
+`src/renderer.ts` has become a large and complex file that tightly couples data fetching (Firebase), state management, and UI rendering (DOM manipulation).
+
+- **Overloaded Snapshot Handler**: The `onSnapshot` callback is responsible for fetching, filtering, sorting, and rendering all articles, which is inefficient and hard to maintain.
+- **Imperative DOM Manipulation**: The use of `document.createElement` for building the article UI is verbose and makes the component structure difficult to understand from the code.
+- **Lack of Separation**: Business logic (Firebase) and presentation logic (DOM) are intertwined.
+
+### Proposed Refactor
+1.  **Optimize Firestore Queries**: Instead of fetching all articles and filtering on the client, create two separate listeners for the "unrated" and "relevant" columns using `where()` clauses (`where('relevant', '==', null)` and `where('relevant', '==', true)`). This offloads work to Firebase and improves performance.
+2.  **Use Declarative Rendering**: Replace the `createElement` logic with a function that uses template literals to build the HTML string for an article. This makes the UI structure much more readable and maintainable. The string can be efficiently inserted into the DOM using `element.insertAdjacentHTML('beforeend', ...)`.
+3.  **Separate Concerns**:
+    - **Article Service**: Create a new module (e.g., `src/services/article-service.ts`) to handle all Firebase interactions. It would expose an API like `onArticlesUpdate(callback)` and `rateArticle(url, isRelevant)`.
+    - **UI Manager**: Create a module responsible only for rendering the DOM. It would receive data and update the UI, decoupling it from the data source.
+    - **Coordinator**: `renderer.ts` would then simply initialize these two modules and connect them.
+
+**Benefits**:
+- **Performance**: More efficient queries reduce data transfer and client-side processing.
+- **Readability**: Declarative HTML templates are easier to read and debug than imperative DOM code.
+- **Scalability**: A clear separation of concerns makes the codebase easier to extend and test.
+
+---
+
+## 3. `src/main.ts`: IPC Handler Logic
+
+### Observation
+While the IPC handlers are well-organized into `setup...` functions, some handlers contain complex business logic directly within them. For example, `learner:generate-profile` manages the entire LangGraph workflow invocation.
+
+### Proposed Refactor
+1.  **Extract Business Logic to Services**: Move the core logic from complex IPC handlers into dedicated service modules (e.g., `src/services/learner-service.ts`).
+2.  **Thin Handlers**: The IPC handlers should become thin wrappers that do little more than call the corresponding service function and handle the promise resolution.
+
+**Example**:
+```typescript
+// Before
+ipcMain.handle('learner:generate-profile', async () => {
+  // Complex workflow logic, state management, error handling...
+});
+
+// After
+import { LearnerService } from './services/learner-service';
+ipcMain.handle('learner:generate-profile', () => LearnerService.generateProfile());
+```
+
+**Benefits**:
+- **Separation of Concerns**: Decouples business logic from the Electron IPC transport layer.
+- **Testability**: Services can be tested independently of the Electron environment.
+- **Reusability**: The core business logic can be reused in other contexts if needed.
+
+---
+
+## 4. `*.js` files in `src/windows/`
+
+### Observation
+Several key UI components like `profile-management.js`, `trash.js`, and `settings.js` are written in plain JavaScript. While functional, they lack the benefits of TypeScript.
+
+### Proposed Refactor
+1.  **Convert to TypeScript**: Rename the `.js` files to `.ts` and add appropriate types for variables, function parameters, and return values.
+2.  **Update Build Process**: Ensure the `tsconfig.json` and build scripts are configured to compile these new TypeScript files correctly.
+
+**Benefits**:
+- **Type Safety**: Catches common errors at compile time, reducing runtime bugs.
+- **Improved Tooling**: Better autocompletion and code intelligence in the IDE.
+- **Consistency**: Aligns the entire codebase with the same language standard (TypeScript). 

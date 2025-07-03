@@ -13,9 +13,6 @@ import {
 
 // Global references to windows
 let mainWindow: BrowserWindow | null = null;
-let settingsWindow: BrowserWindow | null = null;
-let topicSettingsWindow: BrowserWindow | null = null;
-let trashWindow: BrowserWindow | null = null;
 let userConfig: UserConfig | null = null;
 
 // Window registry for data-driven window management
@@ -36,6 +33,17 @@ interface WindowDefinition extends WindowConfig {
 }
 
 const windowDefinitions: WindowDefinition[] = [
+  {
+    id: 'main',
+    width: APP_CONFIG.WINDOW_CONFIG.width,
+    height: APP_CONFIG.WINDOW_CONFIG.height,
+    title: 'Adjutant - AI News Aggregator',
+    htmlFile: '../index.html',
+    preloadFile: 'preload.js',
+    resizable: true,
+    modal: false,
+    showMenuBar: true,
+  },
   {
     id: 'settings',
     width: 700,
@@ -137,6 +145,7 @@ function setupConfigHandlers(): void {
       if (success) {
         userConfig = config;
         // Notify settings window that config was saved
+        const settingsWindow = windowRegistry.get('settings');
         if (settingsWindow && !settingsWindow.isDestroyed()) {
           settingsWindow.webContents.send('settings:config-saved');
         }
@@ -706,36 +715,14 @@ function openWindow(windowId: string): void {
     parent: windowDef.modal ? mainWindow || undefined : undefined,
     onClosed: () => {
       windowRegistry.set(windowId, null);
-      // Update legacy references for backward compatibility
-      updateLegacyWindowReferences(windowId, null);
     },
   };
 
   const newWindow = createWindow(config);
   windowRegistry.set(windowId, newWindow);
-  
-  // Update legacy references for backward compatibility
-  updateLegacyWindowReferences(windowId, newWindow);
 }
 
-/**
- * Update legacy window references for backward compatibility
- * @param windowId - The window ID
- * @param window - The window instance or null
- */
-function updateLegacyWindowReferences(windowId: string, window: BrowserWindow | null): void {
-  switch (windowId) {
-    case 'settings':
-      settingsWindow = window;
-      break;
-    case 'topic-settings':
-      topicSettingsWindow = window;
-      break;
-    case 'trash':
-      trashWindow = window;
-      break;
-  }
-}
+
 
 /**
  * Close a window by ID
@@ -748,27 +735,18 @@ function closeWindow(windowId: string): void {
   }
 }
 
-// Legacy window creation functions (now using generic openWindow)
-function createSettingsWindow(): void {
-  openWindow('settings');
-}
 
-function createTopicSettingsWindow(): void {
-  openWindow('topic-settings');
-}
-
-function createTrashWindow(): void {
-  openWindow('trash');
-}
 
 // Function to create the main application window
 function createMainWindow(): void {
-  mainWindow = createWindow({
-    width: APP_CONFIG.WINDOW_CONFIG.width,
-    height: APP_CONFIG.WINDOW_CONFIG.height,
-    title: 'Adjutant - AI News Aggregator',
-    htmlFile: '../index.html',
-    preloadFile: 'preload.js',
+  const mainWindowDef = windowDefinitions.find(def => def.id === 'main');
+  if (!mainWindowDef) {
+    console.error('Main window definition not found');
+    return;
+  }
+
+  const config: WindowConfig = {
+    ...mainWindowDef,
     onClosed: () => {
       mainWindow = null;
       windowRegistry.set('main', null);
@@ -777,9 +755,9 @@ function createMainWindow(): void {
       // Create application menu for main window
       createApplicationMenu();
     },
-  });
-  
-  // Update the registry
+  };
+
+  mainWindow = createWindow(config);
   windowRegistry.set('main', mainWindow);
 }
 
