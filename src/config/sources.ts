@@ -20,5 +20,15 @@ export const DEFAULT_SOURCES: NewsSource[] = [
     url: 'https://blog.google/technology/google-deepmind/rss/', 
     type: 'RSS' 
   },
+  { 
+    name: 'OpenAI Blog', 
+    url: 'https://openai.com/blog/rss.xml', 
+    type: 'RSS' 
+  },
+  { 
+    name: 'Google AI Blog', 
+    url: 'https://blog.google/technology/ai/rss/', 
+    type: 'RSS' 
+  },
   // Future sources can be added here
 ]; 

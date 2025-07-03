@@ -50,9 +50,38 @@ async function fetchArticlesFromSource(source: NewsSource): Promise<RSSItem[]> {
       item.link && item.title
     ) as RSSItem[];
     
+    // Filter out articles older than 90 days
+    const NINETY_DAYS_AGO = new Date();
+    NINETY_DAYS_AGO.setDate(NINETY_DAYS_AGO.getDate() - 90);
+    
+    const recentArticles = articlesWithLink.filter(item => {
+      if (!item.isoDate) {
+        // If no date, assume it's recent (some feeds might not have dates)
+        console.log(`⚠️  No date found for article: ${item.title}, including anyway`);
+        return true;
+      }
+      
+      try {
+        const articleDate = new Date(item.isoDate);
+        const isRecent = articleDate >= NINETY_DAYS_AGO;
+        
+        if (!isRecent) {
+          console.log(`📅 Skipping old article (${articleDate.toDateString()}): ${item.title}`);
+        }
+        
+        return isRecent;
+      } catch (error) {
+        // If date parsing fails, include the article
+        console.log(`⚠️  Invalid date format for article: ${item.title}, including anyway`);
+        return true;
+      }
+    });
+    
+    console.log(`📅 Filtered ${articlesWithLink.length} articles to ${recentArticles.length} recent articles (within 90 days)`);
+    
     // Limit to first 10 articles to avoid processing too many at once
     const MAX_ARTICLES_PER_FEED = 10;
-    const limitedArticles = articlesWithLink.slice(0, MAX_ARTICLES_PER_FEED);
+    const limitedArticles = recentArticles.slice(0, MAX_ARTICLES_PER_FEED);
     
     console.log(`Found ${articlesWithLink.length} articles with links, processing first ${limitedArticles.length}`);
     
