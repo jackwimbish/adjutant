@@ -401,9 +401,27 @@ function setupWindowHandlers(): void {
         return false;
       }
       
-      const { ArticleService } = await import('./services/article-service');
-      const articleService = new ArticleService(userConfig.firebase);
-      await articleService.unrateArticle(articleUrl);
+      // Create article ID from URL using crypto
+      const crypto = await import('crypto');
+      const articleId = crypto.createHash('sha256').update(articleUrl).digest('hex');
+      
+      // Import Firebase modules
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, doc, updateDoc, deleteField } = await import('firebase/firestore');
+      
+      // Initialize Firebase app for unrating
+      const appName = `trash-unrate-${Date.now()}`;
+      const app = initializeApp(userConfig.firebase, appName);
+      const db = getFirestore(app);
+      
+      const articleRef = doc(db, 'articles', articleId);
+      
+      await updateDoc(articleRef, {
+        relevant: null,
+        rated_at: deleteField()
+      });
+      
+      console.log('Successfully unrated article');
       return true;
       
     } catch (error) {
@@ -419,9 +437,27 @@ function setupWindowHandlers(): void {
         return false;
       }
       
-      const { ArticleService } = await import('./services/article-service');
-      const articleService = new ArticleService(userConfig.firebase);
-      await articleService.rateArticle(articleUrl, isRelevant);
+      // Create article ID from URL using crypto
+      const crypto = await import('crypto');
+      const articleId = crypto.createHash('sha256').update(articleUrl).digest('hex');
+      
+      // Import Firebase modules
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      
+      // Initialize Firebase app for rating
+      const appName = `trash-rate-${Date.now()}`;
+      const app = initializeApp(userConfig.firebase, appName);
+      const db = getFirestore(app);
+      
+      const articleRef = doc(db, 'articles', articleId);
+      
+      await updateDoc(articleRef, {
+        relevant: isRelevant,
+        rated_at: serverTimestamp()
+      });
+      
+      console.log(`Successfully rated article as ${isRelevant ? 'relevant' : 'not relevant'}`);
       return true;
       
     } catch (error) {
