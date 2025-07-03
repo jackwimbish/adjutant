@@ -149,25 +149,25 @@
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
-        .rating-btn.positive {
+        .rating-btn.relevant {
             border-color: #4CAF50;
         }
-        .rating-btn.positive:hover {
+        .rating-btn.relevant:hover {
             background-color: #4CAF50;
             color: white;
         }
-        .rating-btn.neutral {
-            border-color: #FFC107;
-        }
-        .rating-btn.neutral:hover {
-            background-color: #FFC107;
-            color: #1a1a1a;
-        }
-        .rating-btn.negative {
+        .rating-btn.not-relevant {
             border-color: #F44336;
         }
-        .rating-btn.negative:hover {
+        .rating-btn.not-relevant:hover {
             background-color: #F44336;
+            color: white;
+        }
+        .rating-btn.unrate {
+            border-color: #FF9800;
+        }
+        .rating-btn.unrate:hover {
+            background-color: #FF9800;
             color: white;
         }
         .read-btn {
@@ -280,6 +280,34 @@
             box-shadow: none;
         }
         
+        /* Trash button styles */
+        .trash-btn {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: #F44336;
+            border: 1px solid #F44336;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+            margin-right: 10px;
+        }
+        .trash-btn:hover {
+            background-color: #F44336;
+            color: var(--background-color);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+        }
+        .trash-btn:active {
+            transform: translateY(0);
+        }
+        
         /* Header controls layout */
         .header-controls {
             display: flex;
@@ -304,6 +332,9 @@
             <div class="header-buttons">
                 <button id="fetch-btn" class="fetch-btn">
                     📰 Fetch Stories
+                </button>
+                <button id="trash-btn" class="trash-btn">
+                    🗑️ Trash
                 </button>
                 <button id="settings-btn" class="settings-btn">
                     ⚙️ Settings
@@ -433,6 +464,21 @@
                 });
             }
         }
+
+        // Add trash button click handler
+        function setupTrashButton() {
+            const trashBtn = document.getElementById('trash-btn');
+            if (trashBtn) {
+                trashBtn.addEventListener('click', () => {
+                    console.log('HTML: Trash button clicked');
+                    if (window.electronAPI && window.electronAPI.openTrash) {
+                        window.electronAPI.openTrash();
+                    } else {
+                        console.error('HTML: electronAPI.openTrash not available');
+                    }
+                });
+            }
+        }
         
         // Start when page loads
         if (document.readyState === 'loading') {
@@ -440,12 +486,14 @@
                 console.log('HTML: DOMContentLoaded fired');
                 setupSettingsButton();
                 setupFetchButton();
+                setupTrashButton();
                 loadRendererWithConfig();
             });
         } else {
             console.log('HTML: DOM already ready');
             setupSettingsButton();
             setupFetchButton();
+            setupTrashButton();
             loadRendererWithConfig();
         }
     </script>

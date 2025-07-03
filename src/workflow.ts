@@ -108,7 +108,7 @@ function createArticleData(
     is_read: false,
     is_hidden: false,
     is_favorite: false,
-    user_rating: null,  // Initialize as unrated
+    relevant: null,  // Initialize as unrated
     content_source: scrapingData.content_source,
     scraping_status: scrapingData.scraping_status,
     scraping_error: scrapingData.scraping_error,

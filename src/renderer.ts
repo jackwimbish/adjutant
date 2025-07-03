@@ -34,7 +34,7 @@ interface ArticleData {
   is_read: boolean;
   is_hidden: boolean;
   is_favorite: boolean;
-  user_rating: 'positive' | 'negative' | 'neutral' | null;
+  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
   rated_at?: any;
   content_source: 'rss' | 'scraped' | 'failed';
   scraping_status: 'pending' | 'success' | 'failed';
@@ -105,14 +105,14 @@ async function initializeFirebaseAndLoadArticles() {
       snapshot.forEach((doc: any) => {
         const articleData = doc.data() as ArticleData;
         
-        if (!articleData.user_rating) {
-          // Unrated articles (null or undefined rating)
+        if (articleData.relevant === null || articleData.relevant === undefined) {
+          // Unrated articles (null or undefined)
           unratedArticles.push(articleData);
-        } else if (articleData.user_rating === 'positive') {
-          // Positively rated articles
+        } else if (articleData.relevant === true) {
+          // Relevant articles
           relevantArticles.push(articleData);
         }
-        // Skip negative and neutral rated articles
+        // Skip not relevant articles (relevant === false)
       });
       
       // Sort both arrays by published date (newest first)
@@ -196,21 +196,31 @@ function createArticleElement(article: ArticleData, columnType: 'unrated' | 'rel
   // Determine content type status for metadata
   const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
 
-  // Conditionally show rating controls only for unrated articles
-  const ratingControlsHtml = columnType === 'unrated' ? `
-    <div class="rating-controls">
-      <span class="rating-label">Rate this article:</span>
-      <button class="rating-btn positive" data-rating="positive" data-article-url="${escapeHtml(article.url)}">
-        👍 Relevant
-      </button>
-      <button class="rating-btn neutral" data-rating="neutral" data-article-url="${escapeHtml(article.url)}">
-        😐 Neutral
-      </button>
-      <button class="rating-btn negative" data-rating="negative" data-article-url="${escapeHtml(article.url)}">
-        👎 Not Relevant
-      </button>
-    </div>
-  ` : '';
+  // Show rating controls based on column type
+  let ratingControlsHtml = '';
+  if (columnType === 'unrated') {
+    // Show relevance rating buttons for unrated articles
+    ratingControlsHtml = `
+      <div class="rating-controls">
+        <span class="rating-label">Is this article relevant?</span>
+        <button class="rating-btn relevant" data-relevant="true" data-article-url="${escapeHtml(article.url)}">
+          ✅ Relevant
+        </button>
+        <button class="rating-btn not-relevant" data-relevant="false" data-article-url="${escapeHtml(article.url)}">
+          ❌ Not Relevant
+        </button>
+      </div>
+    `;
+  } else if (columnType === 'relevant') {
+    // Show unrate button for relevant articles
+    ratingControlsHtml = `
+      <div class="rating-controls">
+        <button class="rating-btn unrate" data-unrate="true" data-article-url="${escapeHtml(article.url)}">
+          🔄 Unrate Article
+        </button>
+      </div>
+    `;
+  }
 
   // Read status indicator and button
   const readStatusHtml = article.is_read ? 
@@ -244,22 +254,31 @@ function createArticleElement(article: ArticleData, columnType: 'unrated' | 'rel
     </div>
   `;
   
-  // Add event listeners for rating buttons (only for unrated articles)
-  if (columnType === 'unrated') {
-    const ratingButtons = articleElement.querySelectorAll('.rating-btn');
-    ratingButtons.forEach(button => {
-      button.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const target = e.target as HTMLElement;
-        const rating = target.getAttribute('data-rating') as 'positive' | 'negative' | 'neutral';
-        const articleUrl = target.getAttribute('data-article-url');
-        
-        if (rating && articleUrl) {
-          await rateArticle(articleUrl, rating, articleElement);
-        }
-      });
+  // Add event listeners for rating buttons
+  const ratingButtons = articleElement.querySelectorAll('.rating-btn');
+  ratingButtons.forEach(button => {
+    button.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      const articleUrl = target.getAttribute('data-article-url');
+      
+      if (!articleUrl) return;
+      
+      // Check if this is an unrate button
+      const isUnrateButton = target.getAttribute('data-unrate') === 'true';
+      if (isUnrateButton) {
+        await unrateArticle(articleUrl, articleElement);
+        return;
+      }
+      
+      // Handle relevance rating buttons
+      const relevantValue = target.getAttribute('data-relevant');
+      if (relevantValue !== null) {
+        const isRelevant = relevantValue === 'true';
+        await rateArticle(articleUrl, isRelevant, articleElement);
+      }
     });
-  }
+  });
 
   // Add event listener for read button (available for all articles)
   const readButton = articleElement.querySelector('.read-btn');
@@ -340,9 +359,10 @@ async function markArticleAsRead(articleUrl: string, articleElement: HTMLElement
   }
 }
 
-async function rateArticle(articleUrl: string, rating: 'positive' | 'negative' | 'neutral', articleElement: HTMLElement) {
+async function rateArticle(articleUrl: string, isRelevant: boolean, articleElement: HTMLElement) {
   try {
-    console.log(`Rating article as ${rating}: ${articleUrl}`);
+    const relevanceText = isRelevant ? 'relevant' : 'not relevant';
+    console.log(`Rating article as ${relevanceText}: ${articleUrl}`);
     
     // Show loading state
     const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
@@ -362,17 +382,17 @@ async function rateArticle(articleUrl: string, rating: 'positive' | 'negative' |
     const firebase = (window as any).firebase;
     const db = firebase.firestore();
     
-    // Update the article with rating
+    // Update the article with relevance rating
     await db.collection('articles').doc(articleId).update({
-      user_rating: rating,
+      relevant: isRelevant,
       rated_at: firebase.firestore.FieldValue.serverTimestamp()
     });
     
-    console.log(`✅ Successfully rated article as ${rating}`);
+    console.log(`✅ Successfully rated article as ${relevanceText}`);
     
     // Show success message briefly, then remove the article
     if (ratingControls) {
-      ratingControls.innerHTML = `<span style="color: #00aaff;">✓ Rated as ${rating}</span>`;
+      ratingControls.innerHTML = `<span style="color: #00aaff;">✓ Rated as ${relevanceText}</span>`;
     }
     
     // Remove article from UI after brief delay
@@ -397,6 +417,69 @@ async function rateArticle(articleUrl: string, rating: 'positive' | 'negative' |
       // Restore buttons after error
       setTimeout(() => {
         location.reload(); // Simple recovery - reload the page
+      }, 2000);
+    }
+  }
+}
+
+async function unrateArticle(articleUrl: string, articleElement: HTMLElement) {
+  try {
+    console.log(`Unrating article: ${articleUrl}`);
+    
+    // Show loading state
+    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
+    if (ratingControls) {
+      ratingControls.innerHTML = '<span style="color: #888;">Removing rating...</span>';
+    }
+    
+    // Create article ID from URL (same method used in main workflow)
+    const crypto = (window as any).crypto;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(articleUrl);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const articleId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Get Firebase instances
+    const firebase = (window as any).firebase;
+    const db = firebase.firestore();
+    
+    // Update the article to remove relevance rating
+    await db.collection('articles').doc(articleId).update({
+      relevant: null,
+      rated_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✅ Successfully unrated article`);
+    
+    // Show success message briefly, then remove the article from this column
+    if (ratingControls) {
+      ratingControls.innerHTML = '<span style="color: #00aaff;">✓ Rating removed</span>';
+    }
+    
+    // Remove article from UI after brief delay (it will move back to unrated column)
+    setTimeout(() => {
+      articleElement.style.transition = 'all 0.3s ease';
+      articleElement.style.opacity = '0';
+      articleElement.style.transform = 'translateX(-100%)';
+      
+      setTimeout(() => {
+        articleElement.remove();
+      }, 300);
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Error unrating article:', error);
+    const ratingControls = articleElement.querySelector('.rating-controls') as HTMLElement;
+    if (ratingControls) {
+      ratingControls.innerHTML = '<span style="color: red;">Error removing rating</span>';
+      setTimeout(() => {
+        // Restore original unrate button
+        ratingControls.innerHTML = `
+          <button class="rating-btn unrate" data-unrate="true" data-article-url="${escapeHtml(articleUrl)}">
+            🔄 Unrate Article
+          </button>
+        `;
       }, 2000);
     }
   }

@@ -214,7 +214,7 @@ interface ArticleData {
   ai_category: string;
   
   // User interaction
-  user_rating: 'positive' | 'negative' | 'neutral' | null;
+  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
   rated_at?: Date;
   is_read: boolean;
   

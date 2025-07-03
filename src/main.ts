@@ -15,6 +15,7 @@ import {
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let topicSettingsWindow: BrowserWindow | null = null;
+let trashWindow: BrowserWindow | null = null;
 let userConfig: UserConfig | null = null;
 
 // ============================================================================
@@ -214,6 +215,20 @@ function setupWindowHandlers(): void {
       return { success: false, message: 'Failed to start story fetching' };
     }
   });
+
+  ipcMain.on('trash:close-window', () => {
+    if (trashWindow && !trashWindow.isDestroyed()) {
+      trashWindow.close();
+    }
+  });
+
+  ipcMain.on('open-trash', () => {
+    if (!trashWindow || trashWindow.isDestroyed()) {
+      createTrashWindow();
+    } else {
+      trashWindow.focus();
+    }
+  });
 }
 
 /**
@@ -336,6 +351,24 @@ function createTopicSettingsWindow(): void {
   });
 }
 
+// Function to create trash window
+function createTrashWindow(): void {
+  trashWindow = createWindow({
+    width: 1000,
+    height: 800,
+    title: 'Trash - Not Relevant Articles',
+    htmlFile: 'windows/trash.html',
+    preloadFile: 'windows/trash-preload.js',
+    resizable: true,
+    modal: true,
+    parent: mainWindow || undefined,
+    showMenuBar: false,
+    onClosed: () => {
+      trashWindow = null;
+    },
+  });
+}
+
 // Function to create the main application window
 function createMainWindow(): void {
   mainWindow = createWindow({
@@ -368,6 +401,17 @@ function createApplicationMenu(): void {
               createSettingsWindow();
             } else {
               settingsWindow.focus();
+            }
+          }
+        },
+        {
+          label: 'Trash...',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => {
+            if (!trashWindow || trashWindow.isDestroyed()) {
+              createTrashWindow();
+            } else {
+              trashWindow.focus();
             }
           }
         },

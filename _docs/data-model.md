@@ -47,7 +47,8 @@ JSON
   // --- User Interaction & State ---
   "is_read": false, // Set to true when the user reads it
   "is_hidden": false, // Set to true if user clicks "not interested"
-  "is_favorite": false // For a potential "favorites" feature
+  "is_favorite": false, // For a potential "favorites" feature
+  "relevant": null // null = unrated, true = relevant, false = not relevant
 }
 ```
 

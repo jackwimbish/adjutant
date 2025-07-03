@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Expose method to open topic settings window
   openTopicSettings: () => ipcRenderer.send('settings:open-topic-settings'),
   
+  // Expose method to open trash window
+  openTrash: () => ipcRenderer.send('open-trash'),
+  
   // Expose method to manually fetch stories
   fetchStories: () => ipcRenderer.invoke('workflow:fetch-stories'),
 });
