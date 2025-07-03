@@ -77,6 +77,21 @@ const windowDefinitions: WindowDefinition[] = [
       accelerator: 'CmdOrCtrl+T',
     },
   },
+  {
+    id: 'profile-management',
+    width: 900,
+    height: 800,
+    title: 'Profile Management - Adjutant',
+    htmlFile: 'windows/profile-management.html',
+    preloadFile: 'windows/profile-management-preload.js',
+    resizable: true,
+    modal: true,
+    showMenuBar: false,
+    menu: {
+      label: 'Profile Management...',
+      accelerator: 'CmdOrCtrl+P',
+    },
+  },
 ];
 
 // ============================================================================
@@ -267,6 +282,18 @@ function setupWindowHandlers(): void {
   ipcMain.on('open-trash', () => {
     openWindow('trash');
   });
+
+  ipcMain.on('open-profile-management', () => {
+    openWindow('profile-management');
+  });
+
+  ipcMain.on('window:close', () => {
+    // Close the focused window
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    if (focusedWindow) {
+      focusedWindow.close();
+    }
+  });
 }
 
 /**
@@ -393,28 +420,37 @@ function setupLearnerHandlers(): void {
       const { initializeApp } = await import('firebase/app');
       const { getFirestore, doc, getDoc } = await import('firebase/firestore');
       
-      // Initialize Firebase app for profile loading
-      const app = initializeApp(userConfig.firebase, 'profile-load-app');
+      // Initialize Firebase app for profile loading with unique name
+      const appName = `profile-load-${Date.now()}`;
+      const app = initializeApp(userConfig.firebase, appName);
       const db = getFirestore(app);
       
       // Load profile document
       const profileRef = doc(db, 'profiles', 'user-profile');
+      console.log('📄 Attempting to load profile document...');
       const profileDoc = await getDoc(profileRef);
       
       if (profileDoc.exists()) {
         const profile = profileDoc.data();
         console.log(`✅ Profile loaded: ${profile.likes?.length || 0} likes, ${profile.dislikes?.length || 0} dislikes`);
+        console.log('📊 Profile data structure:', JSON.stringify(profile, null, 2));
         
-        return {
+        const result = {
           success: true,
           profile: {
+            id: 'user-profile',
             likes: profile.likes || [],
             dislikes: profile.dislikes || [],
             changelog: profile.changelog || '',
-            lastUpdated: profile.last_updated,
-            createdAt: profile.created_at
+            last_updated: profile.last_updated,
+            created_at: profile.created_at,
+            version: profile.version || 1,
+            articlesAnalyzed: (profile.likes?.length || 0) + (profile.dislikes?.length || 0)
           }
         };
+        
+        console.log('📤 Returning profile result:', JSON.stringify(result, null, 2));
+        return result;
       } else {
         console.log('ℹ️ No profile found');
         return {
@@ -428,6 +464,53 @@ function setupLearnerHandlers(): void {
       return {
         success: false,
         message: `Error loading profile: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  });
+
+  ipcMain.handle('learner:delete-profile', async () => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot delete profile - no user configuration');
+        return { success: false, message: 'No user configuration available' };
+      }
+      
+      console.log('🗑️ Deleting user profile...');
+      
+      // Import Firebase modules
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, doc, deleteDoc, getDoc } = await import('firebase/firestore');
+      
+      // Initialize Firebase app for profile deletion
+      const app = initializeApp(userConfig.firebase, 'profile-delete-app');
+      const db = getFirestore(app);
+      
+      // Check if profile exists
+      const profileRef = doc(db, 'profiles', 'user-profile');
+      const profileDoc = await getDoc(profileRef);
+      
+      if (profileDoc.exists()) {
+        // Delete the profile document
+        await deleteDoc(profileRef);
+        console.log('✅ Profile deleted successfully');
+        
+        return {
+          success: true,
+          message: 'Profile deleted successfully'
+        };
+      } else {
+        console.log('ℹ️ No profile found to delete');
+        return {
+          success: false,
+          message: 'No profile found to delete'
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ Error deleting profile:', error);
+      return {
+        success: false,
+        message: `Error deleting profile: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
   });

@@ -501,6 +501,11 @@ async function rateArticle(articleUrl: string, isRelevant: boolean, articleEleme
     
     console.log(`✅ Successfully rated article as ${relevanceText}`);
     
+    // Check profile threshold after rating (with delay to ensure UI update)
+    setTimeout(() => {
+      checkProfileThresholdInRenderer();
+    }, 500);
+    
     // Show success message briefly, then remove the article
     if (ratingControls) {
       ratingControls.innerHTML = `<span style="color: #00aaff;">✓ Rated as ${relevanceText}</span>`;
@@ -530,6 +535,28 @@ async function rateArticle(articleUrl: string, isRelevant: boolean, articleEleme
         location.reload(); // Simple recovery - reload the page
       }, 2000);
     }
+  }
+}
+
+/**
+ * Check profile threshold from renderer context
+ * This function communicates with the main process to check if profile generation is available
+ */
+async function checkProfileThresholdInRenderer() {
+  try {
+    // Access the window's checkProfileThreshold function that was set up in HTML
+    if ((window as any).checkProfileThreshold) {
+      await (window as any).checkProfileThreshold();
+    } else {
+      console.log('Renderer: checkProfileThreshold function not available');
+    }
+    
+    // Also check for profile existence for profile management button
+    if ((window as any).checkProfileExists) {
+      await (window as any).checkProfileExists();
+    }
+  } catch (error) {
+    console.error('Renderer: Error checking profile threshold:', error);
   }
 }
 

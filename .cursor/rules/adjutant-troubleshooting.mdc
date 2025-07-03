@@ -1,0 +1,213 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Adjutant Troubleshooting Guide
+
+## Common Issues and Solutions
+
+### Profile Management Issues
+
+#### Generate Profile Button Not Visible
+**Symptoms**: Button doesn't appear after rating articles
+**Root Cause**: Insufficient ratings or threshold check failure
+**Debugging Steps**:
+1. Check terminal for `📊 Threshold check: X relevant, Y not relevant`
+2. Verify at least 2 relevant AND 2 not relevant ratings exist
+3. Test threshold check manually via console: `window.electronAPI.checkThreshold()`
+4. Check Firebase `articles` collection for `relevant` field values
+
+#### Profile Button Missing After Generation
+**Symptoms**: Profile generated successfully but management button doesn't appear
+**Root Cause**: Profile existence check failing
+**Solution**:
+- Check `checkProfileExists()` function in [src/renderer.ts](mdc:src/renderer.ts)
+- Verify Firebase profile document exists at `profiles/user-profile`
+- Test profile loading manually: `window.electronAPI.getProfile()`
+
+### Firebase Connection Issues
+
+#### "No Firebase App '[DEFAULT]' has been created"
+**Symptoms**: Firebase connection errors in console
+**Root Cause**: Multiple Firebase instances or naming conflicts
+**Solution**:
+- Use unique app names for each Firebase initialization
+- Pattern: `firebase.initializeApp(config, 'unique-name-${Date.now()}')`
+- Check all Firebase initialization points in windows
+
+#### Firebase Auth/Firestore Errors
+**Symptoms**: Permission denied or connection timeouts
+**Debugging Steps**:
+1. Test Firebase config in Settings window
+2. Verify Firestore security rules allow read/write
+3. Check API key permissions in Firebase console
+4. Validate network connectivity
+
+### Window Management Issues
+
+#### Window Not Loading HTML/JS Files
+**Symptoms**: "ERR_FILE_NOT_FOUND" errors
+**Root Cause**: Missing asset copying step
+**Solution**:
+```bash
+# Copy all window assets after build
+cp src/windows/settings.html dist/windows/
+cp src/windows/settings.js dist/windows/
+cp src/windows/profile-management.html dist/windows/
+cp src/windows/profile-management.js dist/windows/
+cp src/windows/topic-settings.html dist/windows/
+cp src/windows/topic-settings.js dist/windows/
+cp src/windows/trash.html dist/windows/
+cp src/windows/trash.js dist/windows/
+```
+
+#### IPC Handler Not Found
+**Symptoms**: "No handler registered for 'handler-name'"
+**Root Cause**: Handler not added to setup functions
+**Solution**:
+- Add handler to appropriate setup function in [src/main.ts](mdc:src/main.ts)
+- Ensure `setupIpcHandlers()` is called during app initialization
+- Check handler name matches exactly between preload and main process
+
+### Build and Development Issues
+
+#### TypeScript Compilation Errors
+**Common Issues**:
+- Missing type definitions for new interfaces
+- Import path issues with relative paths
+- Firebase type mismatches
+**Solution**:
+- Run `npx tsc --noEmit` for type checking
+- Update [src/types/index.ts](mdc:src/types/index.ts) for new interfaces
+- Use absolute imports from workspace root
+
+#### DevTools Not Opening
+**Symptoms**: No developer tools in windows
+**Root Cause**: APP_CONFIG.DEV_TOOLS_OPEN setting
+**Solution**:
+- Check [src/config/app-config.ts](mdc:src/config/app-config.ts)
+- Ensure development environment is detected
+- Manually open DevTools: `Cmd+Option+I`
+
+### Workflow and AI Integration Issues
+
+#### Learner Workflow Failing
+**Symptoms**: Profile generation errors or timeouts
+**Debugging Steps**:
+1. Check OpenAI API key validity in Settings
+2. Verify sufficient rated articles (2+2 minimum)
+3. Monitor terminal for workflow logs
+4. Check Firebase write permissions
+5. Test API connectivity manually
+
+#### Adaptive Scorer Not Working
+**Symptoms**: Articles not getting personalized scores
+**Root Cause**: Profile loading or OpenAI API issues
+**Solution**:
+- Verify profile exists and loads correctly
+- Check OpenAI API key and rate limits
+- Monitor terminal for "No user profile found" messages
+- Test fallback to traditional scoring
+
+### Performance and Memory Issues
+
+#### High Memory Usage
+**Symptoms**: Application becomes slow or unresponsive
+**Root Cause**: Memory leaks in window management or Firebase connections
+**Solution**:
+- Ensure proper window cleanup in `onClosed` handlers
+- Close Firebase connections when windows close
+- Monitor DevTools Memory tab for leaks
+
+#### Slow Article Processing
+**Symptoms**: Long delays in article analysis
+**Root Cause**: API rate limits or network issues
+**Debugging Steps**:
+1. Check OpenAI API usage and rate limits
+2. Monitor network requests in DevTools
+3. Verify content scraping performance
+4. Check Firebase query efficiency
+
+## Debugging Tools and Techniques
+
+### Console Debugging
+Key console commands for debugging:
+```javascript
+// Test API availability
+window.electronAPI.getProfile()
+window.electronAPI.checkThreshold()
+
+// Check Firebase connection
+firebase.apps // List all Firebase apps
+
+// Test IPC handlers
+window.electronAPI.testFirebase(config)
+window.electronAPI.testOpenAI(config)
+```
+
+### Log Message Patterns
+Look for these key log messages:
+- `📊 Threshold check: X relevant, Y not relevant`
+- `👤 Loading user profile...`
+- `🧠 Starting learner workflow...`
+- `✅ Profile loaded: X likes, Y dislikes`
+- `❌ Error loading profile:`
+- `🔧 Initializing Adaptive Scorer Workflow...`
+
+### Firebase Console Debugging
+Check Firebase console for:
+- Document structure in `profiles/user-profile`
+- Article ratings in `articles` collection
+- Security rule violations
+- API usage and quotas
+
+### Network Debugging
+Monitor network requests for:
+- OpenAI API calls and responses
+- Firebase connection status
+- Content scraping requests
+- Rate limiting issues
+
+## Development Best Practices
+
+### Error Prevention
+- Always use try-catch for async operations
+- Validate inputs before processing
+- Implement timeout handling for API calls
+- Use proper TypeScript typing
+
+### Testing Strategies
+- Test each window individually
+- Verify IPC communication manually
+- Test with various data states (empty, partial, full)
+- Check error handling paths
+
+### Performance Monitoring
+- Monitor memory usage during development
+- Profile Firebase query performance
+- Track API call frequency and costs
+- Optimize content scraping efficiency
+
+## Emergency Recovery
+
+### Reset User Profile
+If profile system is corrupted:
+1. Delete profile document from Firebase: `profiles/user-profile`
+2. Clear local config if needed
+3. Restart application
+4. Re-rate articles to regenerate profile
+
+### Reset Article Ratings
+If rating system is broken:
+1. Update articles in Firebase to set `relevant: null`
+2. Clear `rated_at` timestamps
+3. Restart application
+4. Re-rate articles from clean state
+
+### Factory Reset
+Complete application reset:
+1. Delete local config: `~/Library/Application Support/adjutant/config.json`
+2. Clear Firebase collections (articles, profiles)
+3. Restart application
+4. Reconfigure API keys and settings

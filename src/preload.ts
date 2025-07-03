@@ -17,6 +17,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Expose method to manually fetch stories
   fetchStories: () => ipcRenderer.invoke('workflow:fetch-stories'),
+  
+  // Expose learner workflow methods
+  generateProfile: () => ipcRenderer.invoke('learner:generate-profile'),
+  checkLearnerThreshold: () => ipcRenderer.invoke('learner:check-threshold'),
+  getProfile: () => ipcRenderer.invoke('learner:get-profile'),
+  
+  // Expose method to open profile management window
+  openProfileManagement: () => ipcRenderer.send('open-profile-management'),
 });
 
 // Expose a promise-based Firebase config getter

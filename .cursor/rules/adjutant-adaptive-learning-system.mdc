@@ -1,0 +1,154 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Adjutant Adaptive Learning System Implementation
+
+## Overview
+Adjutant features a sophisticated adaptive learning system that personalizes article scoring based on user reading preferences. The system uses LangGraph workflows with OpenAI integration to analyze user ratings and generate personalized profiles.
+
+## Core Components
+
+### 1. Learner Workflow ([src/workflows/learner-workflow.ts](mdc:src/workflows/learner-workflow.ts))
+5-node LangGraph workflow that generates user profiles from article ratings:
+- **collectFeedback**: Queries Firebase for rated articles
+- **validateThreshold**: Ensures minimum 2 relevant + 2 not relevant ratings
+- **loadExistingProfile**: Loads existing profile for evolution
+- **generateProfile**: Uses OpenAI to analyze preferences and create/update profile
+- **saveProfile**: Saves profile to Firebase `profiles/user-profile` document
+
+### 2. Adaptive Scorer Workflow ([src/workflows/adaptive-scorer-workflow.ts](mdc:src/workflows/adaptive-scorer-workflow.ts))
+3-node workflow for personalized article scoring:
+- **loadProfile**: Loads user profile from Firebase
+- **topicFilter**: Cost-optimized topic relevance check using gpt-4o-mini
+- **profileScoring**: Sophisticated scoring using gpt-4o based on user preferences
+
+### 3. Profile Management System
+Complete UI integration for profile management:
+- **Profile Generation**: Automatic threshold checking and profile creation
+- **Profile Management Window**: Dashboard for viewing, editing, and managing profiles
+- **Real-time Updates**: Dynamic UI updates based on profile state
+
+## Data Model
+
+### UserProfile Interface ([src/types/index.ts](mdc:src/types/index.ts))
+```typescript
+interface UserProfile {
+  likes: string[];           // Max 15 descriptive preference phrases
+  dislikes: string[];        // Max 15 descriptive dislike phrases
+  changelog: string;         // AI explanation of profile changes
+  last_updated: Date;        // Profile update timestamp
+  created_at: Date;          // Profile creation timestamp
+}
+```
+
+### Firebase Document Structure
+- **Collection**: `profiles`
+- **Document ID**: `user-profile` (fixed)
+- **Fields**: Uses snake_case naming (`last_updated`, `created_at`)
+
+## UI Integration (Phase 4)
+
+### Generate Profile Button
+- **Location**: Main window header with purple styling (#9C27B0)
+- **Visibility**: Hidden by default, appears when threshold met (2+2 ratings)
+- **Functionality**: Triggers learner workflow via `learner:generate-profile` IPC
+
+### Profile Management Window
+- **Files**: [src/windows/profile-management.html](mdc:src/windows/profile-management.html), [src/windows/profile-management.js](mdc:src/windows/profile-management.js)
+- **Access**: Cmd+P shortcut or "Profile Management..." menu item
+- **Features**: Statistics, preferences display, export, delete, regenerate
+
+### Profile Button
+- **Location**: Main window header
+- **Visibility**: Appears when profile exists
+- **Functionality**: Opens profile management window
+
+## IPC Handlers ([src/main.ts](mdc:src/main.ts))
+
+### Learner Handlers
+- `learner:generate-profile`: Runs learner workflow
+- `learner:check-threshold`: Validates rating threshold
+- `learner:get-profile`: Loads profile with proper field mapping
+- `learner:delete-profile`: Removes profile from Firebase
+
+### Field Mapping Critical Note
+Firebase uses snake_case (`last_updated`, `created_at`) but UI expects same format. **Never map to camelCase** - this causes loading issues.
+
+## Development Workflow
+
+### Build Process
+```bash
+npm run build
+cp src/windows/profile-management.html dist/windows/
+cp src/windows/profile-management.js dist/windows/
+npm start
+```
+
+### Testing Profile System
+1. Rate at least 2 articles as relevant and 2 as not relevant
+2. Generate Profile button should appear automatically
+3. Click to generate profile (watch terminal for workflow logs)
+4. Profile button should appear after successful generation
+5. Open Profile Management to view/manage profile
+
+## Workflow Integration
+
+### Article Processing Flow
+1. **Enhanced Analysis**: Articles processed through analysis workflow
+2. **Profile Check**: System checks for user profile after each article
+3. **Adaptive Scoring**: Uses profile-based scoring when available
+4. **Fallback**: Traditional scoring when no profile exists
+
+### Cost Optimization
+- **Topic Filtering**: gpt-4o-mini for initial relevance check
+- **Profile Scoring**: gpt-4o for sophisticated preference analysis
+- **Threshold Validation**: Prevents unnecessary API calls
+
+## Error Handling
+
+### Robust Error Management
+- **Retry Logic**: 3 attempts for AI operations with exponential backoff
+- **Firebase Conflicts**: Unique app names prevent instance conflicts
+- **Validation**: Comprehensive input validation and error reporting
+- **Graceful Degradation**: System continues without profile when generation fails
+
+## Performance Considerations
+
+### Firebase Optimization
+- **Unique App Instances**: Each operation uses timestamped app names
+- **Efficient Queries**: Optimized queries for rated articles and profiles
+- **Connection Management**: Proper cleanup and resource management
+
+### Memory Management
+- **Window Lifecycle**: Proper cleanup of profile management window
+- **State Management**: Efficient state updates and UI synchronization
+
+## Debugging
+
+### Key Log Messages
+- `📊 Threshold check: X relevant, Y not relevant`
+- `🧠 Starting learner workflow for profile generation...`
+- `✅ Profile loaded: X likes, Y dislikes`
+- `📄 Attempting to load profile document...`
+
+### Common Issues
+1. **Profile Loading Stuck**: Check field name mapping (snake_case vs camelCase)
+2. **Button Not Visible**: Verify threshold requirements (2+2 ratings)
+3. **Firebase Conflicts**: Ensure unique app instance names
+4. **Window Not Opening**: Verify asset copying in build process
+
+## Future Enhancements
+
+### Planned Features
+- **Profile Evolution**: Automatic profile updates based on new ratings
+- **Multiple Profiles**: Support for different topic-specific profiles
+- **Export/Import**: Profile backup and sharing capabilities
+- **Analytics**: Detailed scoring performance metrics
+
+### Architecture Extensibility
+- **Modular Workflows**: Easy to add new analysis nodes
+- **Plugin System**: Extensible scoring algorithms
+- **Multi-Model Support**: Easy integration of different AI models
+- **Cross-Platform**: Desktop and web deployment ready

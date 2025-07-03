@@ -308,6 +308,46 @@
             transform: translateY(0);
         }
         
+        /* Generate Profile button styles */
+        .profile-btn {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: #9C27B0;
+            border: 1px solid #9C27B0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+            margin-right: 10px;
+        }
+        .profile-btn:hover {
+            background-color: #9C27B0;
+            color: var(--background-color);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3);
+        }
+        .profile-btn:active {
+            transform: translateY(0);
+        }
+        .profile-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .profile-btn:disabled:hover {
+            background-color: var(--primary-color);
+            color: #9C27B0;
+            transform: none;
+            box-shadow: none;
+        }
+        
         /* Header controls layout */
         .header-controls {
             display: flex;
@@ -332,6 +372,12 @@
             <div class="header-buttons">
                 <button id="fetch-btn" class="fetch-btn">
                     📰 Fetch Stories
+                </button>
+                <button id="profile-btn" class="profile-btn" style="display: none;">
+                    🧠 Generate Profile
+                </button>
+                <button id="profile-management-btn" class="profile-btn" style="display: none;">
+                    👤 Profile
                 </button>
                 <button id="trash-btn" class="trash-btn">
                     🗑️ Trash
@@ -479,6 +525,137 @@
                 });
             }
         }
+
+        // Add generate profile button click handler
+        function setupProfileButton() {
+            const profileBtn = document.getElementById('profile-btn');
+            if (profileBtn) {
+                profileBtn.addEventListener('click', async () => {
+                    console.log('HTML: Generate Profile button clicked');
+                    
+                    if (!window.electronAPI || !window.electronAPI.generateProfile) {
+                        console.error('HTML: electronAPI.generateProfile not available');
+                        return;
+                    }
+
+                    // Disable button and show loading state
+                    profileBtn.disabled = true;
+                    const originalText = profileBtn.textContent;
+                    profileBtn.textContent = '🧠 Generating...';
+
+                    try {
+                        const result = await window.electronAPI.generateProfile();
+                        
+                        if (result.success) {
+                            console.log('HTML: Profile generated successfully');
+                            profileBtn.textContent = '✅ Profile Generated';
+                            
+                            // Hide button after successful generation and refresh threshold
+                            setTimeout(() => {
+                                profileBtn.style.display = 'none';
+                                checkProfileThreshold();
+                            }, 2000);
+                        } else {
+                            console.error('HTML: Failed to generate profile:', result.message);
+                            profileBtn.textContent = '❌ Generation Failed';
+                            
+                            // Show error message to user
+                            alert(`Profile generation failed: ${result.message}`);
+                            
+                            // Reset button after showing error
+                            setTimeout(() => {
+                                profileBtn.textContent = originalText;
+                                profileBtn.disabled = false;
+                            }, 3000);
+                        }
+                    } catch (error) {
+                        console.error('HTML: Error generating profile:', error);
+                        profileBtn.textContent = '❌ Error';
+                        
+                        // Reset button after showing error
+                        setTimeout(() => {
+                            profileBtn.textContent = originalText;
+                            profileBtn.disabled = false;
+                        }, 3000);
+                    }
+                });
+            }
+        }
+
+        // Check if profile generation threshold is met
+        async function checkProfileThreshold() {
+            if (!window.electronAPI || !window.electronAPI.checkLearnerThreshold) {
+                console.log('HTML: electronAPI.checkLearnerThreshold not available');
+                return;
+            }
+
+            try {
+                const result = await window.electronAPI.checkLearnerThreshold();
+                const profileBtn = document.getElementById('profile-btn');
+                const profileManagementBtn = document.getElementById('profile-management-btn');
+                
+                if (profileBtn) {
+                    if (result.thresholdMet) {
+                        console.log('HTML: Threshold met - showing Generate Profile button');
+                        profileBtn.style.display = 'flex';
+                        profileBtn.title = result.message;
+                    } else {
+                        console.log('HTML: Threshold not met:', result.message);
+                        profileBtn.style.display = 'none';
+                        profileBtn.title = result.message;
+                    }
+                }
+                
+                // Check if profile exists for profile management button
+                if (profileManagementBtn) {
+                    await checkProfileExists();
+                }
+            } catch (error) {
+                console.error('HTML: Error checking profile threshold:', error);
+            }
+        }
+
+        // Check if profile exists for profile management button
+        async function checkProfileExists() {
+            if (!window.electronAPI || !window.electronAPI.getProfile) {
+                console.log('HTML: electronAPI.getProfile not available');
+                return;
+            }
+
+            try {
+                const result = await window.electronAPI.getProfile();
+                const profileManagementBtn = document.getElementById('profile-management-btn');
+                
+                if (profileManagementBtn) {
+                    if (result.success && result.profile) {
+                        console.log('HTML: Profile exists - showing Profile Management button');
+                        profileManagementBtn.style.display = 'flex';
+                        profileManagementBtn.title = 'View and manage your profile';
+                    } else {
+                        console.log('HTML: No profile found - hiding Profile Management button');
+                        profileManagementBtn.style.display = 'none';
+                        profileManagementBtn.title = 'No profile available';
+                    }
+                }
+            } catch (error) {
+                console.error('HTML: Error checking profile existence:', error);
+            }
+        }
+
+        // Add profile management button click handler
+        function setupProfileManagementButton() {
+            const profileManagementBtn = document.getElementById('profile-management-btn');
+            if (profileManagementBtn) {
+                profileManagementBtn.addEventListener('click', () => {
+                    console.log('HTML: Profile Management button clicked');
+                    if (window.electronAPI && window.electronAPI.openProfileManagement) {
+                        window.electronAPI.openProfileManagement();
+                    } else {
+                        console.error('HTML: electronAPI.openProfileManagement not available');
+                    }
+                });
+            }
+        }
         
         // Start when page loads
         if (document.readyState === 'loading') {
@@ -486,15 +663,23 @@
                 console.log('HTML: DOMContentLoaded fired');
                 setupSettingsButton();
                 setupFetchButton();
+                setupProfileButton();
+                setupProfileManagementButton();
                 setupTrashButton();
                 loadRendererWithConfig();
+                // Check threshold after a delay to ensure renderer is loaded
+                setTimeout(checkProfileThreshold, 1000);
             });
         } else {
             console.log('HTML: DOM already ready');
             setupSettingsButton();
             setupFetchButton();
+            setupProfileButton();
+            setupProfileManagementButton();
             setupTrashButton();
             loadRendererWithConfig();
+            // Check threshold after a delay to ensure renderer is loaded
+            setTimeout(checkProfileThreshold, 1000);
         }
     </script>
 

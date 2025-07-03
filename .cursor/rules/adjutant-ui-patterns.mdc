@@ -1,0 +1,222 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Adjutant UI Patterns and Window Management
+
+## Window Architecture
+
+### Window Factory Pattern
+All windows use a centralized factory pattern in [src/main.ts](mdc:src/main.ts):
+
+```typescript
+interface WindowConfig {
+  width: number;
+  height: number;
+  title: string;
+  htmlFile: string;
+  preloadFile: string;
+  resizable?: boolean;
+  modal?: boolean;
+  parent?: BrowserWindow;
+  showMenuBar?: boolean;
+  onClosed?: () => void;
+  postCreate?: (window: BrowserWindow) => void;
+}
+```
+
+### Window Definitions
+Current windows follow consistent patterns:
+- **Main Window**: [index.html](mdc:index.html) - Article browsing interface (1200x800)
+- **Settings Window**: [src/windows/settings.html](mdc:src/windows/settings.html) - API configuration (700x800, modal)
+- **Topic Settings**: [src/windows/topic-settings.html](mdc:src/windows/topic-settings.html) - Topic filtering (600x700, modal)
+- **Profile Management**: [src/windows/profile-management.html](mdc:src/windows/profile-management.html) - Profile dashboard (modal)
+- **Trash Window**: [src/windows/trash.html](mdc:src/windows/trash.html) - Not relevant articles (1000x800, modal, resizable)
+
+## IPC Communication Patterns
+
+### Security Architecture
+- **Context Isolation**: All windows use `contextIsolation: true`
+- **No Node Integration**: `nodeIntegration: false` for security
+- **Preload Scripts**: Secure IPC bridge via preload files
+
+### Preload Pattern
+Each window has a dedicated preload file:
+- [src/windows/settings-preload.ts](mdc:src/windows/settings-preload.ts)
+- [src/windows/profile-management-preload.ts](mdc:src/windows/profile-management-preload.ts)
+- [src/windows/topic-settings-preload.ts](mdc:src/windows/topic-settings-preload.ts)
+- [src/windows/trash-preload.ts](mdc:src/windows/trash-preload.ts)
+
+### IPC Handler Organization
+Handlers are grouped logically in [src/main.ts](mdc:src/main.ts):
+- **Configuration**: `setupConfigHandlers()` - Config loading/saving
+- **API Testing**: `setupApiTestHandlers()` - Firebase/OpenAI testing
+- **Window Management**: `setupWindowHandlers()` - Window operations
+- **Learner System**: `setupLearnerHandlers()` - Profile management
+
+## UI Component Patterns
+
+### Button States and Loading
+Consistent loading state management:
+```javascript
+function setButtonLoading(button, isLoading) {
+  if (isLoading) {
+    button.disabled = true;
+    button.textContent = 'Loading...';
+  } else {
+    button.disabled = false;
+    // Restore original text
+  }
+}
+```
+
+### Status Messages
+Unified status display system:
+```javascript
+function showStatus(message, isError = false) {
+  const statusDiv = document.getElementById('status');
+  statusDiv.textContent = message;
+  statusDiv.className = isError ? 'status error' : 'status success';
+  statusDiv.style.display = 'block';
+}
+```
+
+### Error Handling Wrapper
+Async operation wrapper with error handling:
+```javascript
+async function withApiCall(button, apiFunction) {
+  try {
+    setButtonLoading(button, true);
+    await apiFunction();
+  } catch (error) {
+    showStatus(`Error: ${error.message}`, true);
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+```
+
+## Firebase Integration Patterns
+
+### Unique App Instances
+Each window creates its own Firebase app to prevent conflicts:
+```javascript
+// Initialize Firebase app with unique name
+const app = firebase.initializeApp(config, 'unique-app-name');
+const db = firebase.firestore(app);
+```
+
+### App Naming Convention
+- **Settings**: `settings-app`
+- **Profile Management**: `profile-management-app`
+- **Trash**: `trash-app`
+- **Main Process**: Timestamped names like `profile-load-${Date.now()}`
+
+## Dynamic UI Updates
+
+### Real-time Button Visibility
+Buttons appear/disappear based on application state:
+- **Generate Profile**: Visible when threshold met (2+2 ratings)
+- **Profile Management**: Visible when profile exists
+- **Trash**: Always visible when configured
+
+### State Checking Functions
+```javascript
+function checkProfileThreshold() {
+  // Check if user has enough ratings for profile generation
+}
+
+function checkProfileExists() {
+  // Check if user profile exists for management
+}
+```
+
+## Menu Integration
+
+### Automatic Menu Generation
+Menu items are generated from window definitions:
+```javascript
+const windowDefinitions = [
+  {
+    id: 'settings',
+    menu: { label: 'Settings...', accelerator: 'CmdOrCtrl+,' }
+  },
+  {
+    id: 'profile-management',
+    menu: { label: 'Profile Management...', accelerator: 'CmdOrCtrl+P' }
+  }
+];
+```
+
+### Menu Item Pattern
+```javascript
+{
+  label: 'Window Name...',
+  accelerator: 'CmdOrCtrl+Key',
+  click: () => {
+    if (!windowReference || windowReference.isDestroyed()) {
+      createWindowFunction();
+    } else {
+      windowReference.focus();
+    }
+  }
+}
+```
+
+## Styling Conventions
+
+### Color Scheme
+- **Primary Actions**: Purple (#9C27B0) for important actions
+- **Success States**: Green for positive feedback
+- **Error States**: Red for error messages
+- **Neutral**: Gray for secondary actions
+
+### Layout Patterns
+- **Modal Windows**: Centered, fixed size, parent-child relationship
+- **Dashboard Layout**: Grid-based statistics and content sections
+- **Form Layout**: Consistent spacing and input grouping
+
+## Build and Asset Management
+
+### Manual Asset Copying
+Non-TypeScript assets must be copied manually:
+```bash
+cp src/windows/settings.html dist/windows/
+cp src/windows/settings.js dist/windows/
+cp src/windows/profile-management.html dist/windows/
+cp src/windows/profile-management.js dist/windows/
+```
+
+### File Organization
+```
+src/windows/
+├── window-name.html           # UI structure
+├── window-name.js            # Business logic (copied manually)
+├── window-name-preload.ts    # IPC bridge (compiled)
+└── window-name.css           # Styles (if separate)
+```
+
+## Development Guidelines
+
+### Adding New Windows
+1. Create HTML file with semantic structure
+2. Create JavaScript file with helper functions
+3. Create TypeScript preload file for IPC
+4. Add window definition to main.ts
+5. Update build process to copy assets
+6. Add menu integration if needed
+
+### Error Handling Best Practices
+- Always wrap async operations in try-catch
+- Provide user-friendly error messages
+- Log detailed errors to console for debugging
+- Implement retry logic for network operations
+- Graceful degradation when features fail
+
+### Performance Optimization
+- Lazy load Firebase connections
+- Cache frequently accessed data
+- Use efficient DOM manipulation
+- Minimize IPC calls
+- Clean up resources on window close

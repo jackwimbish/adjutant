@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Management - Adjutant</title>
+    <style>
+        /* Base styles matching main app */
+        :root {
+            --background-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --primary-color: #3a3a3a;
+            --border-color: #4a4a4a;
+            --accent-color: #00aaff;
+            --success-color: #4CAF50;
+            --warning-color: #FF9800;
+            --error-color: #F44336;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .header h1 {
+            color: var(--accent-color);
+            margin: 0 0 10px 0;
+            font-size: 2em;
+        }
+
+        .header p {
+            margin: 0;
+            opacity: 0.7;
+            font-size: 1.1em;
+        }
+
+        .section {
+            background-color: var(--primary-color);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .section h2 {
+            color: var(--accent-color);
+            margin: 0 0 20px 0;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section h3 {
+            color: var(--text-color);
+            margin: 20px 0 15px 0;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--accent-color);
+            font-size: 1.1em;
+        }
+
+        .error {
+            background-color: rgba(244, 67, 54, 0.1);
+            border: 1px solid var(--error-color);
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            color: var(--error-color);
+        }
+
+        .no-profile {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.7;
+        }
+
+        .no-profile h3 {
+            color: var(--warning-color);
+            margin-bottom: 15px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin: 0 0 10px 0;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin: 0;
+        }
+
+        .preferences-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .preference-item {
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preference-text {
+            flex: 1;
+            margin-right: 15px;
+        }
+
+        .preference-type {
+            font-size: 0.8em;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .preference-type.like {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success-color);
+        }
+
+        .preference-type.dislike {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--error-color);
+        }
+
+        .changelog {
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .changelog h4 {
+            color: var(--accent-color);
+            margin: 0 0 10px 0;
+            font-size: 1em;
+        }
+
+        .changelog p {
+            margin: 0;
+            line-height: 1.5;
+            opacity: 0.9;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: var(--background-color);
+        }
+
+        .btn-secondary {
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-danger {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .metadata-item {
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+        }
+
+        .metadata-label {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .metadata-value {
+            font-weight: 500;
+            color: var(--accent-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+            opacity: 0.6;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Profile Management</h1>
+            <p>View and manage your personalized article preferences</p>
+        </div>
+
+        <div id="loading" class="loading">
+            <div>📊 Loading your profile...</div>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <strong>Error loading profile:</strong>
+            <span id="error-message"></span>
+        </div>
+
+        <div id="no-profile" class="no-profile" style="display: none;">
+            <h3>🚀 No Profile Generated Yet</h3>
+            <p>Rate at least 2 articles as "Relevant" and 2 as "Not Relevant" to generate your personalized profile.</p>
+            <p>Your profile will help Adjutant learn your preferences and score new articles automatically.</p>
+        </div>
+
+        <div id="profile-content" style="display: none;">
+            <!-- Profile Statistics -->
+            <div class="section">
+                <h2>📊 Profile Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="likes-count">0</div>
+                        <div class="stat-label">Preferences (Likes)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="dislikes-count">0</div>
+                        <div class="stat-label">Preferences (Dislikes)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="articles-analyzed">0</div>
+                        <div class="stat-label">Articles Analyzed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="profile-version">1</div>
+                        <div class="stat-label">Profile Version</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Preferences -->
+            <div class="section">
+                <h2>✅ What You Like</h2>
+                <ul id="likes-list" class="preferences-list">
+                    <!-- Populated by JavaScript -->
+                </ul>
+                <div id="likes-empty" class="empty-state" style="display: none;">
+                    No preferences identified yet
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>❌ What You Dislike</h2>
+                <ul id="dislikes-list" class="preferences-list">
+                    <!-- Populated by JavaScript -->
+                </ul>
+                <div id="dislikes-empty" class="empty-state" style="display: none;">
+                    No preferences identified yet
+                </div>
+            </div>
+
+            <!-- Profile Metadata -->
+            <div class="section">
+                <h2>ℹ️ Profile Information</h2>
+                <div class="metadata">
+                    <div class="metadata-item">
+                        <div class="metadata-label">Created</div>
+                        <div class="metadata-value" id="created-date">-</div>
+                    </div>
+                    <div class="metadata-item">
+                        <div class="metadata-label">Last Updated</div>
+                        <div class="metadata-value" id="updated-date">-</div>
+                    </div>
+                    <div class="metadata-item">
+                        <div class="metadata-label">Profile ID</div>
+                        <div class="metadata-value" id="profile-id">user-profile</div>
+                    </div>
+                    <div class="metadata-item">
+                        <div class="metadata-label">Status</div>
+                        <div class="metadata-value" id="profile-status">Active</div>
+                    </div>
+                </div>
+
+                <!-- Profile Changelog -->
+                <div id="changelog-section" style="display: none;">
+                    <h3>📝 Recent Changes</h3>
+                    <div id="changelog" class="changelog">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="actions">
+            <button id="refresh-btn" class="btn btn-primary">
+                🔄 Refresh Profile
+            </button>
+            <button id="regenerate-btn" class="btn btn-secondary">
+                🧠 Regenerate Profile
+            </button>
+            <button id="export-btn" class="btn btn-secondary">
+                📤 Export Profile
+            </button>
+            <button id="delete-btn" class="btn btn-danger">
+                🗑️ Delete Profile
+            </button>
+            <button id="close-btn" class="btn btn-secondary">
+                ❌ Close
+            </button>
+        </div>
+    </div>
+
+    <script src="profile-management.js"></script>
+</body>
+</html> 
