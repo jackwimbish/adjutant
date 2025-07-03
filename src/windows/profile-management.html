@@ -269,6 +269,113 @@
             opacity: 0.6;
             font-style: italic;
         }
+
+        /* Edit Mode Styles */
+        .count-indicator {
+            font-size: 0.8em;
+            font-weight: normal;
+            opacity: 0.7;
+            margin-left: 10px;
+        }
+
+        .edit-controls {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+
+        .add-preference {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .add-preference input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            font-size: 0.9em;
+        }
+
+        .add-preference input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.2);
+        }
+
+        .add-preference input.error {
+            border-color: var(--error-color);
+            box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.85em;
+            min-width: auto;
+        }
+
+        .edit-help {
+            font-size: 0.8em;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .preference-item.edit-mode {
+            position: relative;
+        }
+
+        .preference-item .remove-btn {
+            display: none;
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--error-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .preference-item.edit-mode .remove-btn {
+            display: block;
+        }
+
+        .preference-item.edit-mode .preference-type {
+            margin-right: 35px;
+        }
+
+        .actions {
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        #edit-mode-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .unsaved-changes {
+            background-color: rgba(255, 152, 0, 0.1);
+            border-left-color: var(--warning-color);
+        }
+
+        .unsaved-indicator {
+            color: var(--warning-color);
+            font-size: 0.9em;
+            margin-left: 10px;
+            font-weight: normal;
+        }
     </style>
 </head>
 <body>
@@ -319,22 +426,44 @@
 
             <!-- Profile Preferences -->
             <div class="section">
-                <h2>✅ What You Like</h2>
+                <h2>✅ What You Like <span id="likes-count-display" class="count-indicator">0/15</span></h2>
                 <ul id="likes-list" class="preferences-list">
                     <!-- Populated by JavaScript -->
                 </ul>
                 <div id="likes-empty" class="empty-state" style="display: none;">
                     No preferences identified yet
                 </div>
+                
+                <!-- Edit Mode Controls for Likes -->
+                <div id="likes-edit-controls" class="edit-controls" style="display: none;">
+                    <div class="add-preference">
+                        <input type="text" id="add-like-input" placeholder="Add a new preference (min 5 characters)" maxlength="200">
+                        <button id="add-like-btn" class="btn btn-primary btn-small">Add</button>
+                    </div>
+                    <div class="edit-help">
+                        Add things you're interested in reading about
+                    </div>
+                </div>
             </div>
 
             <div class="section">
-                <h2>❌ What You Dislike</h2>
+                <h2>❌ What You Dislike <span id="dislikes-count-display" class="count-indicator">0/15</span></h2>
                 <ul id="dislikes-list" class="preferences-list">
                     <!-- Populated by JavaScript -->
                 </ul>
                 <div id="dislikes-empty" class="empty-state" style="display: none;">
                     No preferences identified yet
+                </div>
+                
+                <!-- Edit Mode Controls for Dislikes -->
+                <div id="dislikes-edit-controls" class="edit-controls" style="display: none;">
+                    <div class="add-preference">
+                        <input type="text" id="add-dislike-input" placeholder="Add something you want to avoid (min 5 characters)" maxlength="200">
+                        <button id="add-dislike-btn" class="btn btn-primary btn-small">Add</button>
+                    </div>
+                    <div class="edit-help">
+                        Add things you don't want to read about
+                    </div>
                 </div>
             </div>
 
@@ -372,21 +501,39 @@
 
         <!-- Action Buttons -->
         <div class="actions">
-            <button id="refresh-btn" class="btn btn-primary">
-                🔄 Refresh Profile
+            <!-- Edit Mode Toggle -->
+            <button id="edit-mode-btn" class="btn btn-primary" style="display: none;">
+                ✏️ Edit Preferences
             </button>
-            <button id="regenerate-btn" class="btn btn-secondary">
-                🧠 Regenerate Profile
-            </button>
-            <button id="export-btn" class="btn btn-secondary">
-                📤 Export Profile
-            </button>
-            <button id="delete-btn" class="btn btn-danger">
-                🗑️ Delete Profile
-            </button>
-            <button id="close-btn" class="btn btn-secondary">
-                ❌ Close
-            </button>
+            
+            <!-- Edit Mode Actions (hidden by default) -->
+            <div id="edit-mode-actions" style="display: none;">
+                <button id="save-changes-btn" class="btn btn-primary">
+                    💾 Save Changes
+                </button>
+                <button id="cancel-edit-btn" class="btn btn-secondary">
+                    🚫 Cancel
+                </button>
+            </div>
+            
+            <!-- Normal Mode Actions -->
+            <div id="normal-mode-actions">
+                <button id="refresh-btn" class="btn btn-primary">
+                    🔄 Refresh Profile
+                </button>
+                <button id="regenerate-btn" class="btn btn-secondary">
+                    🧠 Regenerate Profile
+                </button>
+                <button id="export-btn" class="btn btn-secondary">
+                    📤 Export Profile
+                </button>
+                <button id="delete-btn" class="btn btn-danger">
+                    🗑️ Delete Profile
+                </button>
+                <button id="close-btn" class="btn btn-secondary">
+                    ❌ Close
+                </button>
+            </div>
         </div>
     </div>
 

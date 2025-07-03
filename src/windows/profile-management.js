@@ -36,8 +36,33 @@ const exportBtn = document.getElementById('export-btn');
 const deleteBtn = document.getElementById('delete-btn');
 const closeBtn = document.getElementById('close-btn');
 
-// Current profile data
+// Edit mode elements
+const editModeBtn = document.getElementById('edit-mode-btn');
+const editModeActions = document.getElementById('edit-mode-actions');
+const normalModeActions = document.getElementById('normal-mode-actions');
+const saveChangesBtn = document.getElementById('save-changes-btn');
+const cancelEditBtn = document.getElementById('cancel-edit-btn');
+
+// Count displays
+const likesCountDisplay = document.getElementById('likes-count-display');
+const dislikesCountDisplay = document.getElementById('dislikes-count-display');
+
+// Edit controls
+const likesEditControls = document.getElementById('likes-edit-controls');
+const dislikesEditControls = document.getElementById('dislikes-edit-controls');
+const addLikeInput = document.getElementById('add-like-input');
+const addLikeBtn = document.getElementById('add-like-btn');
+const addDislikeInput = document.getElementById('add-dislike-input');
+const addDislikeBtn = document.getElementById('add-dislike-btn');
+
+// Current profile data and edit state
 let currentProfile = null;
+let isEditMode = false;
+let stagedChanges = {
+    likes: [],
+    dislikes: []
+};
+let hasUnsavedChanges = false;
 
 /**
  * Initialize the profile management window
@@ -56,11 +81,33 @@ async function initializeProfileManagement() {
  * Set up event listeners for all interactive elements
  */
 function setupEventListeners() {
+    // Normal mode buttons
     refreshBtn.addEventListener('click', handleRefresh);
     regenerateBtn.addEventListener('click', handleRegenerate);
     exportBtn.addEventListener('click', handleExport);
     deleteBtn.addEventListener('click', handleDelete);
     closeBtn.addEventListener('click', handleClose);
+    
+    // Edit mode buttons
+    editModeBtn.addEventListener('click', enterEditMode);
+    saveChangesBtn.addEventListener('click', saveChanges);
+    cancelEditBtn.addEventListener('click', cancelEdit);
+    
+    // Add preference buttons
+    addLikeBtn.addEventListener('click', () => addPreference('like'));
+    addDislikeBtn.addEventListener('click', () => addPreference('dislike'));
+    
+    // Input enter key handling
+    addLikeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addPreference('like');
+    });
+    addDislikeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addPreference('dislike');
+    });
+    
+    // Input validation on type
+    addLikeInput.addEventListener('input', () => validateInput(addLikeInput));
+    addDislikeInput.addEventListener('input', () => validateInput(addDislikeInput));
 }
 
 /**
@@ -108,6 +155,14 @@ function displayProfile(profile) {
     // Show profile content
     profileContentDiv.style.display = 'block';
     
+    // Show edit mode button
+    editModeBtn.style.display = 'inline-flex';
+    
+    // Initialize staging data
+    stagedChanges.likes = [...profile.likes];
+    stagedChanges.dislikes = [...profile.dislikes];
+    hasUnsavedChanges = false;
+    
     // Update statistics
     updateStatistics(profile);
     
@@ -138,16 +193,20 @@ function updateStatistics(profile) {
  * Update preferences display
  */
 function updatePreferences(profile) {
-    const likes = profile.likes || [];
-    const dislikes = profile.dislikes || [];
+    // Use staged changes if in edit mode, otherwise use profile data
+    const likes = isEditMode ? stagedChanges.likes : (profile?.likes || []);
+    const dislikes = isEditMode ? stagedChanges.dislikes : (profile?.dislikes || []);
+    
+    // Update count displays
+    updateCountDisplays();
     
     // Update likes
     if (likes.length > 0) {
         likesList.innerHTML = '';
         likesEmpty.style.display = 'none';
         
-        likes.forEach(like => {
-            const listItem = createPreferenceItem(like, 'like');
+        likes.forEach((like, index) => {
+            const listItem = createPreferenceItem(like, 'like', index);
             likesList.appendChild(listItem);
         });
     } else {
@@ -160,8 +219,8 @@ function updatePreferences(profile) {
         dislikesList.innerHTML = '';
         dislikesEmpty.style.display = 'none';
         
-        dislikes.forEach(dislike => {
-            const listItem = createPreferenceItem(dislike, 'dislike');
+        dislikes.forEach((dislike, index) => {
+            const listItem = createPreferenceItem(dislike, 'dislike', index);
             dislikesList.appendChild(listItem);
         });
     } else {
@@ -173,9 +232,9 @@ function updatePreferences(profile) {
 /**
  * Create a preference item element
  */
-function createPreferenceItem(preference, type) {
+function createPreferenceItem(preference, type, index) {
     const listItem = document.createElement('li');
-    listItem.className = 'preference-item';
+    listItem.className = `preference-item ${isEditMode ? 'edit-mode' : ''}`;
     
     const textDiv = document.createElement('div');
     textDiv.className = 'preference-text';
@@ -187,6 +246,16 @@ function createPreferenceItem(preference, type) {
     
     listItem.appendChild(textDiv);
     listItem.appendChild(typeSpan);
+    
+    // Add remove button in edit mode
+    if (isEditMode) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove this preference';
+        removeBtn.addEventListener('click', () => removePreference(type, index));
+        listItem.appendChild(removeBtn);
+    }
     
     return listItem;
 }
@@ -495,6 +564,17 @@ function hideNoProfile() {
  * Handle close button click
  */
 function handleClose() {
+    // Check for unsaved changes
+    if (hasUnsavedChanges) {
+        const confirmed = confirm(
+            'You have unsaved changes that will be lost.\n\n' +
+            'Are you sure you want to close without saving?'
+        );
+        if (!confirmed) {
+            return;
+        }
+    }
+    
     console.log('Closing profile management window...');
     if (window.electronAPI && window.electronAPI.closeWindow) {
         window.electronAPI.closeWindow();
@@ -502,6 +582,199 @@ function handleClose() {
         // Fallback: close the window using standard method
         window.close();
     }
+}
+
+// =============================================================================
+// EDIT MODE FUNCTIONALITY
+// =============================================================================
+
+/**
+ * Enter edit mode
+ */
+function enterEditMode() {
+    console.log('Entering edit mode...');
+    isEditMode = true;
+    
+    // Update UI state
+    editModeBtn.style.display = 'none';
+    editModeActions.style.display = 'flex';
+    normalModeActions.style.display = 'none';
+    likesEditControls.style.display = 'block';
+    dislikesEditControls.style.display = 'block';
+    
+    // Refresh the preferences display to show remove buttons
+    updatePreferences(currentProfile);
+}
+
+/**
+ * Exit edit mode
+ */
+function exitEditMode() {
+    console.log('Exiting edit mode...');
+    isEditMode = false;
+    hasUnsavedChanges = false;
+    
+    // Update UI state
+    editModeBtn.style.display = 'inline-flex';
+    editModeActions.style.display = 'none';
+    normalModeActions.style.display = 'flex';
+    likesEditControls.style.display = 'none';
+    dislikesEditControls.style.display = 'none';
+    
+    // Clear inputs
+    addLikeInput.value = '';
+    addDislikeInput.value = '';
+    addLikeInput.classList.remove('error');
+    addDislikeInput.classList.remove('error');
+    
+    // Refresh the preferences display to hide remove buttons
+    updatePreferences(currentProfile);
+}
+
+/**
+ * Cancel edit mode
+ */
+function cancelEdit() {
+    console.log('Canceling edit mode...');
+    
+    // Restore original data
+    if (currentProfile) {
+        stagedChanges.likes = [...currentProfile.likes];
+        stagedChanges.dislikes = [...currentProfile.dislikes];
+    }
+    
+    exitEditMode();
+}
+
+/**
+ * Save changes
+ */
+async function saveChanges() {
+    console.log('Saving changes...');
+    
+    const originalText = saveChangesBtn.textContent;
+    saveChangesBtn.textContent = '💾 Saving...';
+    saveChangesBtn.disabled = true;
+    
+    try {
+        const result = await window.electronAPI.updateProfileManual(
+            stagedChanges.likes,
+            stagedChanges.dislikes
+        );
+        
+        if (result.success) {
+            saveChangesBtn.textContent = '✅ Saved';
+            
+            // Update the current profile with saved changes
+            currentProfile.likes = [...stagedChanges.likes];
+            currentProfile.dislikes = [...stagedChanges.dislikes];
+            currentProfile.changelog = 'User manually adjusted likes/dislikes';
+            currentProfile.last_updated = new Date();
+            
+            // Exit edit mode
+            setTimeout(() => {
+                exitEditMode();
+                saveChangesBtn.textContent = originalText;
+                saveChangesBtn.disabled = false;
+                
+                // Refresh to get updated profile from server
+                handleRefresh();
+            }, 1500);
+        } else {
+            throw new Error(result.message || 'Failed to save changes');
+        }
+    } catch (error) {
+        console.error('Error saving changes:', error);
+        saveChangesBtn.textContent = '❌ Error';
+        alert(`Failed to save changes: ${error.message}`);
+        
+        setTimeout(() => {
+            saveChangesBtn.textContent = originalText;
+            saveChangesBtn.disabled = false;
+        }, 2000);
+    }
+}
+
+/**
+ * Add a new preference
+ */
+function addPreference(type) {
+    const input = type === 'like' ? addLikeInput : addDislikeInput;
+    const value = input.value.trim();
+    
+    // Validate input
+    if (!validatePreferenceInput(value)) {
+        input.classList.add('error');
+        return;
+    }
+    
+    // Check limit
+    const currentArray = type === 'like' ? stagedChanges.likes : stagedChanges.dislikes;
+    if (currentArray.length >= 15) {
+        alert(`Maximum 15 ${type}s allowed.`);
+        return;
+    }
+    
+    // Add to staged changes
+    currentArray.push(value);
+    hasUnsavedChanges = true;
+    
+    // Clear input
+    input.value = '';
+    input.classList.remove('error');
+    
+    // Update display
+    updatePreferences(currentProfile);
+    
+    console.log(`Added ${type}: "${value}"`);
+}
+
+/**
+ * Remove a preference
+ */
+function removePreference(type, index) {
+    const currentArray = type === 'like' ? stagedChanges.likes : stagedChanges.dislikes;
+    const removed = currentArray.splice(index, 1)[0];
+    hasUnsavedChanges = true;
+    
+    // Update display
+    updatePreferences(currentProfile);
+    
+    console.log(`Removed ${type}: "${removed}"`);
+}
+
+/**
+ * Validate preference input
+ */
+function validatePreferenceInput(value) {
+    return value.length >= 5 && value.trim().length >= 5;
+}
+
+/**
+ * Validate input field
+ */
+function validateInput(input) {
+    const value = input.value.trim();
+    if (value.length > 0 && !validatePreferenceInput(value)) {
+        input.classList.add('error');
+    } else {
+        input.classList.remove('error');
+    }
+}
+
+/**
+ * Update count displays
+ */
+function updateCountDisplays() {
+    const likes = isEditMode ? stagedChanges.likes : (currentProfile?.likes || []);
+    const dislikes = isEditMode ? stagedChanges.dislikes : (currentProfile?.dislikes || []);
+    
+    likesCountDisplay.textContent = `${likes.length}/15`;
+    dislikesCountDisplay.textContent = `${dislikes.length}/15`;
+    
+    // Update color based on limit
+    likesCountDisplay.style.color = likes.length >= 15 ? 'var(--warning-color)' : '';
+    dislikesCountDisplay.style.color = dislikes.length >= 15 ? 'var(--warning-color)' : '';
 }
 
 // Initialize when DOM is ready

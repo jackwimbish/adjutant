@@ -165,15 +165,22 @@ async function topicFilterNode(state: typeof AdaptiveScorerStateAnnotation.State
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Create topic relevance prompt with enhanced clarity
+      // Get the best available content, truncated to 4000 characters for cost efficiency
+      const availableContent = state.article.full_content_text || state.article.ai_summary || state.article.rss_excerpt || 'No content available';
+      const contentPreview = availableContent.length > 4000 ? availableContent.substring(0, 4000) + '...' : availableContent;
+      
+      // Create topic relevance prompt with enhanced content
       const topicPrompt = `Is this article relevant to the topic: "${state.topicDescription}"?
 
 Article Title: ${state.article.title}
-Article Summary: ${state.article.ai_summary || state.article.rss_excerpt || 'No summary available'}
+
+Article Content:
+${contentPreview}
 
 Instructions:
 - Consider if the article content directly relates to the specified topic
 - Ignore tangential mentions unless they are the main focus
+- Look at the main themes, techniques, tools, and subject matter discussed
 - Respond with ONLY "yes" or "no" (no additional text)
 
 Response:`;

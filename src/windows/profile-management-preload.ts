@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProfile: () => ipcRenderer.invoke('learner:get-profile'),
   generateProfile: () => ipcRenderer.invoke('learner:generate-profile'),
   deleteProfile: () => ipcRenderer.invoke('learner:delete-profile'),
+  updateProfileManual: (likes: string[], dislikes: string[]) => ipcRenderer.invoke('learner:update-profile-manual', likes, dislikes),
   
   // Window management
   closeWindow: () => ipcRenderer.send('window:close'),

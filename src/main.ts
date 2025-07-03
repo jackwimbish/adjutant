@@ -514,6 +514,89 @@ function setupLearnerHandlers(): void {
       };
     }
   });
+
+  ipcMain.handle('learner:update-profile-manual', async (event, likes: string[], dislikes: string[]) => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot update profile - no user configuration');
+        return { success: false, message: 'No user configuration available' };
+      }
+      
+      // Input validation
+      if (!Array.isArray(likes) || !Array.isArray(dislikes)) {
+        return { success: false, message: 'Invalid input: likes and dislikes must be arrays' };
+      }
+      
+      if (likes.length > 15 || dislikes.length > 15) {
+        return { success: false, message: 'Maximum 15 likes and 15 dislikes allowed' };
+      }
+      
+      // Validate each preference
+      const validatePreference = (pref: string): boolean => {
+        if (typeof pref !== 'string') return false;
+        const trimmed = pref.trim();
+        return trimmed.length >= 5 && trimmed.length > 0;
+      };
+      
+      const invalidLikes = likes.filter(like => !validatePreference(like));
+      const invalidDislikes = dislikes.filter(dislike => !validatePreference(dislike));
+      
+      if (invalidLikes.length > 0 || invalidDislikes.length > 0) {
+        return { 
+          success: false, 
+          message: 'All preferences must be at least 5 characters long and not empty' 
+        };
+      }
+      
+      console.log('📝 Updating user profile manually...');
+      console.log(`   Likes: ${likes.length}, Dislikes: ${dislikes.length}`);
+      
+      // Import Firebase modules
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, doc, updateDoc, getDoc } = await import('firebase/firestore');
+      
+      // Initialize Firebase app for profile update
+      const appName = `profile-update-${Date.now()}`;
+      const app = initializeApp(userConfig.firebase, appName);
+      const db = getFirestore(app);
+      
+      // Check if profile exists
+      const profileRef = doc(db, 'profiles', 'user-profile');
+      const profileDoc = await getDoc(profileRef);
+      
+      if (!profileDoc.exists()) {
+        return {
+          success: false,
+          message: 'No profile found to update'
+        };
+      }
+      
+      // Update the profile document with manual changes
+      const updateData = {
+        likes: likes.map(like => like.trim()),
+        dislikes: dislikes.map(dislike => dislike.trim()),
+        changelog: 'User manually adjusted likes/dislikes',
+        last_updated: new Date()
+      };
+      
+      await updateDoc(profileRef, updateData);
+      
+      console.log('✅ Profile updated successfully');
+      console.log(`   New likes: ${likes.length}, New dislikes: ${dislikes.length}`);
+      
+      return {
+        success: true,
+        message: 'Profile updated successfully'
+      };
+      
+    } catch (error) {
+      console.error('❌ Error updating profile:', error);
+      return {
+        success: false,
+        message: `Error updating profile: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  });
 }
 
 /**

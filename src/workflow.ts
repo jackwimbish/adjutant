@@ -120,8 +120,8 @@ async function analyzeArticleWithAdaptiveScoring(
     scraping_error: analysisResult.scraping_error || null,
     content_length: analysisResult.content_length || 0,
     // Initialize topic filtering fields
-    topic_filtered: false,
-    topic_filtered_at: undefined
+    topic_filtered: false
+    // Note: topic_filtered_at is optional and will be set by adaptive scorer if topic filtering occurs
   };
   
   // Run adaptive scoring workflow
@@ -144,7 +144,7 @@ async function analyzeArticleWithAdaptiveScoring(
       },
       // Add topic filtering information
       topic_filtered: scoredArticle.topic_filtered || false,
-      topic_filtered_at: scoredArticle.topic_filtered_at
+      ...(scoredArticle.topic_filtered_at && { topic_filtered_at: scoredArticle.topic_filtered_at })
     };
     
     console.log(`✅ Adaptive scoring completed: ${scoredArticle.ai_score ? `${scoredArticle.ai_score}/10` : 'unscored'}`);
@@ -292,7 +292,9 @@ async function processArticle(article: RSSItem, source: NewsSource) {
     // Add topic filtering fields if they exist
     if (analysis.topic_filtered !== undefined) {
       (articleData as any).topic_filtered = analysis.topic_filtered;
-      (articleData as any).topic_filtered_at = analysis.topic_filtered_at;
+      if (analysis.topic_filtered_at) {
+        (articleData as any).topic_filtered_at = analysis.topic_filtered_at;
+      }
     }
     
     // Save the structured data to Firestore with retry logic
