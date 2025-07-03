@@ -274,10 +274,10 @@ function setupWindowHandlers(): void {
         return { success: false, message: 'No user configuration available' };
       }
 
-      console.log('Manual workflow triggered by user');
-      startWorkflow();
+      const { WorkflowService } = await import('./services/workflow-service');
+      const workflowService = new WorkflowService(userConfig);
+      return await workflowService.startStoryFetching();
       
-      return { success: true, message: 'Story fetching started successfully' };
     } catch (error) {
       console.error('Error starting workflow:', error);
       return { success: false, message: 'Failed to start story fetching' };
@@ -316,38 +316,9 @@ function setupLearnerHandlers(): void {
         return { success: false, message: 'No user configuration available' };
       }
       
-      console.log('🧠 Starting learner workflow for profile generation...');
-      
-      // Import and run the learner workflow
-      const { runLearnerWorkflow } = await import('./workflows/learner-workflow');
-      const result = await runLearnerWorkflow(userConfig);
-      
-      // Check if profile was successfully generated
-      if ((result as any).generatedProfile) {
-        const profile = (result as any).generatedProfile;
-        console.log('✅ Profile generated successfully');
-        return { 
-          success: true, 
-          message: 'Profile generated successfully',
-          profile: {
-            likesCount: profile.likes.length,
-            dislikesCount: profile.dislikes.length,
-            lastUpdated: profile.last_updated
-          }
-        };
-      } else if ((result as any).validationPassed === false) {
-        console.log('❌ Profile generation failed - insufficient training data');
-        return { 
-          success: false, 
-          message: 'Need at least 2 relevant and 2 not relevant ratings to generate profile'
-        };
-      } else {
-        console.log('❌ Profile generation failed after retries');
-        return { 
-          success: false, 
-          message: 'Profile generation failed after multiple attempts'
-        };
-      }
+      const { LearnerService } = await import('./services/learner-service');
+      const learnerService = new LearnerService(userConfig);
+      return await learnerService.generateProfile();
       
     } catch (error) {
       console.error('❌ Error in learner workflow:', error);
@@ -370,40 +341,9 @@ function setupLearnerHandlers(): void {
         };
       }
       
-      console.log('📊 Checking learner threshold...');
-      
-      // Import Firebase modules
-      const { initializeApp } = await import('firebase/app');
-      const { getFirestore, collection, query, where, getDocs } = await import('firebase/firestore');
-      
-      // Initialize Firebase app for threshold checking
-      const app = initializeApp(userConfig.firebase, 'threshold-check-app');
-      const db = getFirestore(app);
-      
-      // Query for relevant and not relevant articles
-      const articlesRef = collection(db, 'articles');
-      const relevantQuery = query(articlesRef, where('relevant', '==', true));
-      const notRelevantQuery = query(articlesRef, where('relevant', '==', false));
-      
-      const [relevantSnap, notRelevantSnap] = await Promise.all([
-        getDocs(relevantQuery),
-        getDocs(notRelevantQuery)
-      ]);
-      
-      const relevantCount = relevantSnap.size;
-      const notRelevantCount = notRelevantSnap.size;
-      const thresholdMet = relevantCount >= 2 && notRelevantCount >= 2;
-      
-      console.log(`📊 Threshold check: ${relevantCount} relevant, ${notRelevantCount} not relevant`);
-      
-      return {
-        thresholdMet,
-        relevantCount,
-        notRelevantCount,
-        message: thresholdMet 
-          ? 'Ready to generate profile' 
-          : `Need ${Math.max(0, 2 - relevantCount)} more relevant and ${Math.max(0, 2 - notRelevantCount)} more not relevant ratings`
-      };
+      const { LearnerService } = await import('./services/learner-service');
+      const learnerService = new LearnerService(userConfig);
+      return await learnerService.checkThreshold();
       
     } catch (error) {
       console.error('❌ Error checking threshold:', error);
@@ -423,50 +363,9 @@ function setupLearnerHandlers(): void {
         return { success: false, message: 'No user configuration available' };
       }
       
-      console.log('👤 Loading user profile...');
-      
-      // Import Firebase modules
-      const { initializeApp } = await import('firebase/app');
-      const { getFirestore, doc, getDoc } = await import('firebase/firestore');
-      
-      // Initialize Firebase app for profile loading with unique name
-      const appName = `profile-load-${Date.now()}`;
-      const app = initializeApp(userConfig.firebase, appName);
-      const db = getFirestore(app);
-      
-      // Load profile document
-      const profileRef = doc(db, 'profiles', 'user-profile');
-      console.log('📄 Attempting to load profile document...');
-      const profileDoc = await getDoc(profileRef);
-      
-      if (profileDoc.exists()) {
-        const profile = profileDoc.data();
-        console.log(`✅ Profile loaded: ${profile.likes?.length || 0} likes, ${profile.dislikes?.length || 0} dislikes`);
-        console.log('📊 Profile data structure:', JSON.stringify(profile, null, 2));
-        
-        const result = {
-          success: true,
-          profile: {
-            id: 'user-profile',
-            likes: profile.likes || [],
-            dislikes: profile.dislikes || [],
-            changelog: profile.changelog || '',
-            last_updated: profile.last_updated,
-            created_at: profile.created_at,
-            version: profile.version || 1,
-            articlesAnalyzed: (profile.likes?.length || 0) + (profile.dislikes?.length || 0)
-          }
-        };
-        
-        console.log('📤 Returning profile result:', JSON.stringify(result, null, 2));
-        return result;
-      } else {
-        console.log('ℹ️ No profile found');
-        return {
-          success: false,
-          message: 'No profile found'
-        };
-      }
+      const { LearnerService } = await import('./services/learner-service');
+      const learnerService = new LearnerService(userConfig);
+      return await learnerService.getProfile();
       
     } catch (error) {
       console.error('❌ Error loading profile:', error);
@@ -484,36 +383,9 @@ function setupLearnerHandlers(): void {
         return { success: false, message: 'No user configuration available' };
       }
       
-      console.log('🗑️ Deleting user profile...');
-      
-      // Import Firebase modules
-      const { initializeApp } = await import('firebase/app');
-      const { getFirestore, doc, deleteDoc, getDoc } = await import('firebase/firestore');
-      
-      // Initialize Firebase app for profile deletion
-      const app = initializeApp(userConfig.firebase, 'profile-delete-app');
-      const db = getFirestore(app);
-      
-      // Check if profile exists
-      const profileRef = doc(db, 'profiles', 'user-profile');
-      const profileDoc = await getDoc(profileRef);
-      
-      if (profileDoc.exists()) {
-        // Delete the profile document
-        await deleteDoc(profileRef);
-        console.log('✅ Profile deleted successfully');
-        
-        return {
-          success: true,
-          message: 'Profile deleted successfully'
-        };
-      } else {
-        console.log('ℹ️ No profile found to delete');
-        return {
-          success: false,
-          message: 'No profile found to delete'
-        };
-      }
+      const { LearnerService } = await import('./services/learner-service');
+      const learnerService = new LearnerService(userConfig);
+      return await learnerService.deleteProfile();
       
     } catch (error) {
       console.error('❌ Error deleting profile:', error);
@@ -531,72 +403,9 @@ function setupLearnerHandlers(): void {
         return { success: false, message: 'No user configuration available' };
       }
       
-      // Input validation
-      if (!Array.isArray(likes) || !Array.isArray(dislikes)) {
-        return { success: false, message: 'Invalid input: likes and dislikes must be arrays' };
-      }
-      
-      if (likes.length > 15 || dislikes.length > 15) {
-        return { success: false, message: 'Maximum 15 likes and 15 dislikes allowed' };
-      }
-      
-      // Validate each preference
-      const validatePreference = (pref: string): boolean => {
-        if (typeof pref !== 'string') return false;
-        const trimmed = pref.trim();
-        return trimmed.length >= 5 && trimmed.length > 0;
-      };
-      
-      const invalidLikes = likes.filter(like => !validatePreference(like));
-      const invalidDislikes = dislikes.filter(dislike => !validatePreference(dislike));
-      
-      if (invalidLikes.length > 0 || invalidDislikes.length > 0) {
-        return { 
-          success: false, 
-          message: 'All preferences must be at least 5 characters long and not empty' 
-        };
-      }
-      
-      console.log('📝 Updating user profile manually...');
-      console.log(`   Likes: ${likes.length}, Dislikes: ${dislikes.length}`);
-      
-      // Import Firebase modules
-      const { initializeApp } = await import('firebase/app');
-      const { getFirestore, doc, updateDoc, getDoc } = await import('firebase/firestore');
-      
-      // Initialize Firebase app for profile update
-      const appName = `profile-update-${Date.now()}`;
-      const app = initializeApp(userConfig.firebase, appName);
-      const db = getFirestore(app);
-      
-      // Check if profile exists
-      const profileRef = doc(db, 'profiles', 'user-profile');
-      const profileDoc = await getDoc(profileRef);
-      
-      if (!profileDoc.exists()) {
-        return {
-          success: false,
-          message: 'No profile found to update'
-        };
-      }
-      
-      // Update the profile document with manual changes
-      const updateData = {
-        likes: likes.map(like => like.trim()),
-        dislikes: dislikes.map(dislike => dislike.trim()),
-        changelog: 'User manually adjusted likes/dislikes',
-        last_updated: new Date()
-      };
-      
-      await updateDoc(profileRef, updateData);
-      
-      console.log('✅ Profile updated successfully');
-      console.log(`   New likes: ${likes.length}, New dislikes: ${dislikes.length}`);
-      
-      return {
-        success: true,
-        message: 'Profile updated successfully'
-      };
+      const { LearnerService } = await import('./services/learner-service');
+      const learnerService = new LearnerService(userConfig);
+      return await learnerService.updateProfileManual(likes, dislikes);
       
     } catch (error) {
       console.error('❌ Error updating profile:', error);
@@ -833,32 +642,7 @@ function createApplicationMenu(): void {
   Menu.setApplicationMenu(menu);
 }
 
-// Function to run the background workflow script
-function runWorkflow(): void {
-  if (!userConfig) {
-    console.log('Skipping workflow - no user configuration available');
-    return;
-  }
 
-  console.log('Spawning workflow process...');
-  // Use 'ts-node' to execute the TypeScript workflow file.
-  // In a packaged app, you would spawn the compiled .js file directly.
-  const workflowProcess = spawn('npx', ['ts-node', path.join(__dirname, APP_CONFIG.WORKFLOW_SCRIPT_PATH)], {
-    shell: true, // Use shell to properly handle 'npx' command across platforms
-  });
-
-  workflowProcess.stdout.on('data', (data) => {
-    console.log(`Workflow STDOUT: ${data}`);
-  });
-
-  workflowProcess.stderr.on('data', (data) => {
-    console.error(`Workflow STDERR: ${data}`);
-  });
-
-  workflowProcess.on('close', (code) => {
-    console.log(`Workflow process exited with code ${code}`);
-  });
-}
 
 // Function to initialize the application
 async function initializeApp(): Promise<void> {
@@ -904,16 +688,7 @@ async function initializeApp(): Promise<void> {
   }
 }
 
-// Function to start the workflow system (now manual only)
-function startWorkflow(): void {
-  if (!userConfig) {
-    console.error('Cannot start workflow - no user configuration');
-    return;
-  }
 
-  // Run the workflow manually (no automatic scheduling)
-  runWorkflow();
-}
 
 // This method will be called when Electron has finished initialization
 app.whenReady().then(async () => {

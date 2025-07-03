@@ -88,7 +88,7 @@ This hybrid approach suggests an incomplete transition to a more robust, central
 
 ---
 
-## 3. `src/main.ts`: IPC Handler Logic
+## 3. `src/main.ts`: IPC Handler Logic ✅ **COMPLETED**
 
 ### Observation
 While the IPC handlers are well-organized into `setup...` functions, some handlers contain complex business logic directly within them. For example, `learner:generate-profile` manages the entire LangGraph workflow invocation.
@@ -113,6 +113,40 @@ ipcMain.handle('learner:generate-profile', () => LearnerService.generateProfile(
 - **Separation of Concerns**: Decouples business logic from the Electron IPC transport layer.
 - **Testability**: Services can be tested independently of the Electron environment.
 - **Reusability**: The core business logic can be reused in other contexts if needed.
+
+### Implementation Results ✅
+**Completed**: This refactor has been successfully implemented with the following changes:
+
+1. **Created LearnerService**: New `src/services/learner-service.ts` module extracts all profile management logic
+   - `checkThreshold()`: Firebase querying and validation logic
+   - `generateProfile()`: LangGraph workflow management
+   - `getProfile()`: Profile loading with proper field mapping
+   - `deleteProfile()`: Profile deletion operations
+   - `updateProfileManual()`: Profile validation and updating
+   - Comprehensive error handling and logging
+
+2. **Created WorkflowService**: New `src/services/workflow-service.ts` module handles story fetching
+   - `startStoryFetching()`: Workflow execution management
+   - Process spawning and monitoring logic
+   - Cross-platform compatibility handling
+
+3. **Refactored IPC Handlers**: All handlers in `setupLearnerHandlers()` now use service methods
+   - Reduced from 300+ lines to ~90 lines (70% reduction)
+   - Thin wrapper pattern: handlers only validate config and call service methods
+   - Consistent error handling across all handlers
+   - Eliminated duplicate Firebase initialization and business logic
+
+4. **Removed Legacy Functions**: Cleaned up unused workflow functions
+   - Deleted `runWorkflow()` and `startWorkflow()` functions
+   - Consolidated workflow logic into service-based architecture
+
+**Benefits Achieved**:
+- **Separation of Concerns**: Business logic completely decoupled from IPC transport layer
+- **Testability**: Services can be unit tested independently of Electron environment
+- **Maintainability**: Complex logic centralized in dedicated service modules
+- **Reusability**: Service methods can be used in other contexts (CLI tools, web interface)
+- **Type Safety**: Comprehensive TypeScript interfaces for all service responses
+- **Code Reduction**: 70% reduction in IPC handler complexity and duplication
 
 ---
 
