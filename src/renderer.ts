@@ -171,137 +171,248 @@ async function initializeFirebaseAndLoadArticles() {
   }
 }
 
+/**
+ * Helper function to format article publication date
+ */
+function formatArticleDate(publishedAt: any): string {
+  try {
+    if (publishedAt && typeof publishedAt.toDate === 'function') {
+      return publishedAt.toDate().toLocaleDateString();
+    } else if (publishedAt instanceof Date) {
+      return publishedAt.toLocaleDateString();
+    } else {
+      return 'Unknown date';
+    }
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return 'Unknown date';
+  }
+}
+
+/**
+ * Create the article header with title
+ */
+function createArticleHeader(article: ArticleData): HTMLElement {
+  const headerDiv = document.createElement('div');
+  headerDiv.className = 'article-header';
+  
+  const titleElement = document.createElement('h2');
+  titleElement.className = 'article-title';
+  titleElement.textContent = article.title;
+  
+  headerDiv.appendChild(titleElement);
+  return headerDiv;
+}
+
+/**
+ * Create the article summary paragraph
+ */
+function createArticleSummary(article: ArticleData): HTMLElement {
+  const summaryElement = document.createElement('p');
+  summaryElement.className = 'article-summary';
+  summaryElement.textContent = article.ai_summary;
+  return summaryElement;
+}
+
+/**
+ * Create the read status element (button or status indicator)
+ */
+function createReadStatusElement(article: ArticleData): HTMLElement {
+  if (article.is_read) {
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'read-status';
+    statusSpan.textContent = '✅ Read';
+    return statusSpan;
+  } else {
+    const readButton = document.createElement('button');
+    readButton.className = 'read-btn';
+    readButton.textContent = '📖 Mark as Read';
+    readButton.setAttribute('data-article-url', article.url);
+    
+    // Add event listener
+    readButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const articleElement = readButton.closest('.article') as HTMLElement;
+      if (articleElement) {
+        await markArticleAsRead(article.url, articleElement);
+      }
+    });
+    
+    return readButton;
+  }
+}
+
+/**
+ * Create rating controls based on column type
+ */
+function createRatingControls(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement | null {
+  if (columnType === 'unrated') {
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'rating-controls';
+    
+    const label = document.createElement('span');
+    label.className = 'rating-label';
+    label.textContent = 'Is this article relevant?';
+    
+    const relevantButton = document.createElement('button');
+    relevantButton.className = 'rating-btn relevant';
+    relevantButton.textContent = '✅ Relevant';
+    relevantButton.setAttribute('data-relevant', 'true');
+    relevantButton.setAttribute('data-article-url', article.url);
+    
+    const notRelevantButton = document.createElement('button');
+    notRelevantButton.className = 'rating-btn not-relevant';
+    notRelevantButton.textContent = '❌ Not Relevant';
+    notRelevantButton.setAttribute('data-relevant', 'false');
+    notRelevantButton.setAttribute('data-article-url', article.url);
+    
+    // Add event listeners
+    const handleRatingClick = async (e: Event) => {
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      const relevantValue = target.getAttribute('data-relevant');
+      if (relevantValue !== null) {
+        const isRelevant = relevantValue === 'true';
+        const articleElement = target.closest('.article') as HTMLElement;
+        if (articleElement) {
+          await rateArticle(article.url, isRelevant, articleElement);
+        }
+      }
+    };
+    
+    relevantButton.addEventListener('click', handleRatingClick);
+    notRelevantButton.addEventListener('click', handleRatingClick);
+    
+    controlsDiv.appendChild(label);
+    controlsDiv.appendChild(relevantButton);
+    controlsDiv.appendChild(notRelevantButton);
+    
+    return controlsDiv;
+  } else if (columnType === 'relevant') {
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'rating-controls';
+    
+    const unrateButton = document.createElement('button');
+    unrateButton.className = 'rating-btn unrate';
+    unrateButton.textContent = '🔄 Unrate Article';
+    unrateButton.setAttribute('data-unrate', 'true');
+    unrateButton.setAttribute('data-article-url', article.url);
+    
+    // Add event listener
+    unrateButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const articleElement = unrateButton.closest('.article') as HTMLElement;
+      if (articleElement) {
+        await unrateArticle(article.url, articleElement);
+      }
+    });
+    
+    controlsDiv.appendChild(unrateButton);
+    return controlsDiv;
+  }
+  
+  return null;
+}
+
+/**
+ * Create the article actions section
+ */
+function createArticleActions(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement {
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'article-actions';
+  
+  // Create action row with read link and read status
+  const actionRow = document.createElement('div');
+  actionRow.className = 'action-row';
+  
+  const readLink = document.createElement('a');
+  readLink.href = article.url;
+  readLink.target = '_blank';
+  readLink.className = 'read-full-link';
+  readLink.textContent = 'Read Full Article ↗';
+  
+  const readStatusElement = createReadStatusElement(article);
+  
+  actionRow.appendChild(readLink);
+  actionRow.appendChild(readStatusElement);
+  actionsDiv.appendChild(actionRow);
+  
+  // Add rating controls if applicable
+  const ratingControls = createRatingControls(article, columnType);
+  if (ratingControls) {
+    actionsDiv.appendChild(ratingControls);
+  }
+  
+  return actionsDiv;
+}
+
+/**
+ * Create the article metadata section
+ */
+function createArticleMeta(article: ArticleData): HTMLElement {
+  const metaDiv = document.createElement('div');
+  metaDiv.className = 'article-meta';
+  
+  const publishedDate = formatArticleDate(article.published_at);
+  const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
+  
+  // Create individual meta spans
+  const sourceSpan = document.createElement('span');
+  sourceSpan.textContent = `Source: ${article.source_name}`;
+  
+  const separator1 = document.createTextNode(' | ');
+  
+  const dateSpan = document.createElement('span');
+  dateSpan.textContent = `Published: ${publishedDate}`;
+  
+  const separator2 = document.createTextNode(' | ');
+  
+  const scoreSpan = document.createElement('span');
+  scoreSpan.textContent = `Score: ${article.ai_score.toFixed(1)}`;
+  
+  const separator3 = document.createTextNode(' | ');
+  
+  const contentTypeSpan = document.createElement('span');
+  contentTypeSpan.textContent = `${contentTypeIcon} ${article.content_source}`;
+  
+  metaDiv.appendChild(sourceSpan);
+  metaDiv.appendChild(separator1);
+  metaDiv.appendChild(dateSpan);
+  metaDiv.appendChild(separator2);
+  metaDiv.appendChild(scoreSpan);
+  metaDiv.appendChild(separator3);
+  metaDiv.appendChild(contentTypeSpan);
+  
+  return metaDiv;
+}
+
+/**
+ * Main function to create an article element using component-based approach
+ */
 function createArticleElement(article: ArticleData, columnType: 'unrated' | 'relevant'): HTMLElement {
   const articleElement = document.createElement('div');
   articleElement.classList.add('article');
   
-  // Handle Firestore Timestamp
-  let publishedDate: string;
-  try {
-    if (article.published_at && typeof article.published_at.toDate === 'function') {
-      publishedDate = article.published_at.toDate().toLocaleDateString();
-    } else if (article.published_at instanceof Date) {
-      publishedDate = article.published_at.toLocaleDateString();
-    } else {
-      publishedDate = 'Unknown date';
-    }
-  } catch (error) {
-    console.warn('Error formatting date:', error);
-    publishedDate = 'Unknown date';
-  }
-  
-  // Create unique ID for this article
-  const articleId = `article-${btoa(article.url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16)}`;
-  
-  // Determine content type status for metadata
-  const contentTypeIcon = article.content_source === 'scraped' ? '📰' : '📝';
-
-  // Show rating controls based on column type
-  let ratingControlsHtml = '';
-  if (columnType === 'unrated') {
-    // Show relevance rating buttons for unrated articles
-    ratingControlsHtml = `
-      <div class="rating-controls">
-        <span class="rating-label">Is this article relevant?</span>
-        <button class="rating-btn relevant" data-relevant="true" data-article-url="${escapeHtml(article.url)}">
-          ✅ Relevant
-        </button>
-        <button class="rating-btn not-relevant" data-relevant="false" data-article-url="${escapeHtml(article.url)}">
-          ❌ Not Relevant
-        </button>
-      </div>
-    `;
-  } else if (columnType === 'relevant') {
-    // Show unrate button for relevant articles
-    ratingControlsHtml = `
-      <div class="rating-controls">
-        <button class="rating-btn unrate" data-unrate="true" data-article-url="${escapeHtml(article.url)}">
-          🔄 Unrate Article
-        </button>
-      </div>
-    `;
-  }
-
-  // Read status indicator and button
-  const readStatusHtml = article.is_read ? 
-    '<span class="read-status">✅ Read</span>' : 
-    `<button class="read-btn" data-article-url="${escapeHtml(article.url)}">📖 Mark as Read</button>`;
-
-  // Add read class for styling
+  // Add read class for styling if article is read
   if (article.is_read) {
     articleElement.classList.add('read');
   }
-
-  articleElement.innerHTML = `
-    <div class="article-header">
-      <h2 class="article-title">${escapeHtml(article.title)}</h2>
-    </div>
-    <p class="article-summary">${escapeHtml(article.ai_summary)}</p>
-    <div class="article-actions">
-      <div class="action-row">
-        <a href="${escapeHtml(article.url)}" target="_blank" class="read-full-link">
-          Read Full Article ↗
-        </a>
-        ${readStatusHtml}
-      </div>
-      ${ratingControlsHtml}
-    </div>
-    <div class="article-meta">
-      <span>Source: ${escapeHtml(article.source_name)}</span> |
-      <span>Published: ${publishedDate}</span> |
-      <span>Score: ${article.ai_score.toFixed(1)}</span> |
-      <span>${contentTypeIcon} ${article.content_source}</span>
-    </div>
-  `;
   
-  // Add event listeners for rating buttons
-  const ratingButtons = articleElement.querySelectorAll('.rating-btn');
-  ratingButtons.forEach(button => {
-    button.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const target = e.target as HTMLElement;
-      const articleUrl = target.getAttribute('data-article-url');
-      
-      if (!articleUrl) return;
-      
-      // Check if this is an unrate button
-      const isUnrateButton = target.getAttribute('data-unrate') === 'true';
-      if (isUnrateButton) {
-        await unrateArticle(articleUrl, articleElement);
-        return;
-      }
-      
-      // Handle relevance rating buttons
-      const relevantValue = target.getAttribute('data-relevant');
-      if (relevantValue !== null) {
-        const isRelevant = relevantValue === 'true';
-        await rateArticle(articleUrl, isRelevant, articleElement);
-      }
-    });
-  });
-
-  // Add event listener for read button (available for all articles)
-  const readButton = articleElement.querySelector('.read-btn');
-  if (readButton) {
-    readButton.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const target = e.target as HTMLElement;
-      const articleUrl = target.getAttribute('data-article-url');
-      
-      if (articleUrl) {
-        await markArticleAsRead(articleUrl, articleElement);
-      }
-    });
-  }
+  // Create and append all components
+  const header = createArticleHeader(article);
+  const summary = createArticleSummary(article);
+  const actions = createArticleActions(article, columnType);
+  const meta = createArticleMeta(article);
+  
+  articleElement.appendChild(header);
+  articleElement.appendChild(summary);
+  articleElement.appendChild(actions);
+  articleElement.appendChild(meta);
   
   return articleElement;
 }
 
-function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// escapeHtml function no longer needed with programmatic DOM creation
 
 // formatContent function removed since we no longer display scraped content in the UI
 
@@ -474,12 +585,21 @@ async function unrateArticle(articleUrl: string, articleElement: HTMLElement) {
     if (ratingControls) {
       ratingControls.innerHTML = '<span style="color: red;">Error removing rating</span>';
       setTimeout(() => {
-        // Restore original unrate button
-        ratingControls.innerHTML = `
-          <button class="rating-btn unrate" data-unrate="true" data-article-url="${escapeHtml(articleUrl)}">
-            🔄 Unrate Article
-          </button>
-        `;
+        // Restore original unrate button using programmatic DOM creation
+        const unrateButton = document.createElement('button');
+        unrateButton.className = 'rating-btn unrate';
+        unrateButton.textContent = '🔄 Unrate Article';
+        unrateButton.setAttribute('data-unrate', 'true');
+        unrateButton.setAttribute('data-article-url', articleUrl);
+        
+        // Add event listener
+        unrateButton.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await unrateArticle(articleUrl, articleElement);
+        });
+        
+        ratingControls.innerHTML = '';
+        ratingControls.appendChild(unrateButton);
       }, 2000);
     }
   }
