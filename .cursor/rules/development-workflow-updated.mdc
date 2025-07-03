@@ -1,0 +1,223 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Development Workflow (Post-Refactoring)
+
+## Overview
+This rule documents the updated development workflow after the comprehensive refactoring of Adjutant, including the improved build process and development practices.
+
+## Complete Build Process
+
+### 1. TypeScript Compilation
+```bash
+npm run build  # Compiles .ts files from src/ to dist/
+```
+
+### 2. Manual Asset Copying (Required)
+The TypeScript compiler only handles `.ts` files. Settings window assets must be copied manually:
+
+```bash
+# Settings window assets
+cp src/windows/settings.html dist/windows/
+cp src/windows/settings.js dist/windows/
+
+# Topic settings window assets  
+cp src/windows/topic-settings.html dist/windows/
+cp src/windows/topic-settings.js dist/windows/
+```
+
+### 3. Application Start
+```bash
+npm start  # Runs the compiled application from dist/
+```
+
+## Development Cycle
+For active development, use this complete sequence:
+
+```bash
+# Complete development build
+npm run build
+cp src/windows/settings.html dist/windows/
+cp src/windows/settings.js dist/windows/
+cp src/windows/topic-settings.html dist/windows/
+cp src/windows/topic-settings.js dist/windows/
+npm start
+```
+
+## File Structure After Refactoring
+
+### Core Architecture Files
+- [src/main.ts](mdc:src/main.ts) - Main process with centralized IPC handlers
+- [src/config/user-config.ts](mdc:src/config/user-config.ts) - Schema-based configuration system
+- [src/windows/settings.js](mdc:src/windows/settings.js) - Refactored settings UI with helper functions
+
+### Build Output Structure
+```
+dist/
+├── main.js                 # Compiled from src/main.ts
+├── config/
+│   └── user-config.js      # Compiled configuration system
+├── windows/
+│   ├── settings.html       # Copied manually
+│   ├── settings.js         # Copied manually
+│   ├── settings-preload.js # Compiled from .ts
+│   ├── topic-settings.html # Copied manually
+│   ├── topic-settings.js   # Copied manually
+│   └── topic-settings-preload.js # Compiled from .ts
+└── ...
+```
+
+## Testing Workflow
+
+### Configuration Testing
+The refactored configuration system includes comprehensive validation:
+
+```typescript
+// Test configuration loading
+const config = loadUserConfig();
+if (!isConfigValid(config)) {
+  console.log('Validation errors:', getConfigValidationErrors(config));
+}
+```
+
+### API Testing
+Settings windows now include live API testing:
+- **Firebase Test**: Validates all 6 configuration fields with live connection
+- **OpenAI Test**: Tests API key validity with actual API call
+- **Real-time Feedback**: Success/error messages with specific error details
+
+### Window Testing
+Test all window creation patterns:
+- Settings window (modal to main window)
+- Topic settings window (modal to main window)
+- Main window (with menu and workflow integration)
+
+## Code Quality Checks
+
+### TypeScript Validation
+```bash
+npx tsc --noEmit  # Type checking without compilation
+```
+
+### Schema Validation
+Configuration is validated using Zod schemas:
+- Runtime validation with detailed error messages
+- Type inference for compile-time safety
+- Automatic validation in IPC handlers
+
+## Development Best Practices
+
+### IPC Handler Development
+When adding new IPC handlers to [src/main.ts](mdc:src/main.ts):
+
+1. **Choose the appropriate handler group**:
+   - Configuration: `setupConfigHandlers()`
+   - API Testing: `setupApiTestHandlers()`
+   - Window Management: `setupWindowHandlers()`
+   - Legacy: `setupLegacyHandlers()`
+
+2. **Follow the error handling pattern**:
+   ```typescript
+   ipcMain.handle('new-handler', async (event, params) => {
+     try {
+       // Implementation
+       return result;
+     } catch (error) {
+       console.error('Error in new-handler:', error);
+       return null;
+     }
+   });
+   ```
+
+### Window Creation
+Use the factory pattern for new windows:
+
+```typescript
+function createNewWindow(): void {
+  newWindow = createWindow({
+    width: 800,
+    height: 600,
+    title: 'New Window',
+    htmlFile: 'path/to/file.html',
+    preloadFile: 'path/to/preload.js',
+    onClosed: () => { newWindow = null; }
+  });
+}
+```
+
+### Configuration Updates
+When extending configuration:
+
+1. **Update the Zod schema** in [src/config/user-config.ts](mdc:src/config/user-config.ts)
+2. **Add validation logic** if needed
+3. **Update settings UI** to handle new fields
+4. **Test configuration loading/saving**
+
+## Debugging and Troubleshooting
+
+### Common Issues After Refactoring
+
+#### Settings Window Not Loading
+- **Symptom**: "ERR_FILE_NOT_FOUND" for settings.html
+- **Cause**: Missing manual file copy step
+- **Solution**: Run the manual asset copying commands
+
+#### IPC Handler Not Found
+- **Symptom**: "No handler registered for 'handler-name'"
+- **Cause**: Handler not added to appropriate setup function
+- **Solution**: Add handler to correct group in `setupIpcHandlers()`
+
+#### Configuration Validation Errors
+- **Symptom**: Settings window opens on every launch
+- **Cause**: Configuration fails schema validation
+- **Solution**: Check `getConfigValidationErrors()` output
+
+### Development Tools
+- **DevTools**: Available in all windows during development
+- **Console Logging**: Comprehensive error logging in all IPC handlers
+- **Type Checking**: Run `npx tsc --noEmit` for type validation
+
+## Performance Considerations
+
+### Build Performance
+- **Incremental Builds**: TypeScript supports incremental compilation
+- **Asset Copying**: Only copy changed files during development
+- **Watch Mode**: Consider using `tsc --watch` for continuous compilation
+
+### Runtime Performance
+- **Lazy Loading**: Dynamic imports for optional dependencies
+- **Resource Management**: Proper cleanup of window references
+- **Configuration Caching**: Configuration loaded once at startup
+
+## Distribution Building
+
+### Production Build
+```bash
+npm run dist:mac    # Build macOS DMG
+# OR
+npm run dist        # Build for current platform
+```
+
+### Build Validation
+Before distribution:
+1. Run complete build process
+2. Test all window creation
+3. Validate configuration system
+4. Test API connections
+5. Verify cross-platform compatibility
+
+## Migration Notes
+
+### From Previous Version
+If migrating from pre-refactoring code:
+1. **IPC Handlers**: May need to update handler names/signatures
+2. **Window Creation**: Update to use factory pattern
+3. **Configuration**: Existing config files should work with new validation
+4. **Build Process**: Add manual asset copying step
+
+### Backward Compatibility
+- **Configuration Files**: Old config files are automatically migrated
+- **IPC Handlers**: Legacy handlers maintained for compatibility
+- **Window Behavior**: All existing functionality preserved

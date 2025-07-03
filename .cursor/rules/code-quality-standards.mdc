@@ -1,0 +1,270 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Code Quality Standards
+
+## Overview
+This rule documents the code quality standards and best practices established through Adjutant's comprehensive refactoring process.
+
+## Function Organization Principles
+
+### Logical Grouping
+Functions should be grouped by purpose with clear section headers:
+
+```typescript
+// ============================================================================
+// IPC HANDLERS
+// ============================================================================
+
+// ============================================================================
+// WINDOW CREATION
+// ============================================================================
+```
+
+### Documentation Requirements
+- **Function Purpose**: Each function group should have a descriptive comment
+- **JSDoc Comments**: Complex functions should include JSDoc documentation
+- **Parameter Descriptions**: Document non-obvious parameters
+
+## Error Handling Patterns
+
+### IPC Handler Error Handling
+All IPC handlers in [src/main.ts](mdc:src/main.ts) follow this pattern:
+
+```typescript
+ipcMain.handle('handler-name', async (event, params) => {
+  try {
+    // Implementation
+    return result;
+  } catch (error) {
+    console.error('Descriptive error message:', error);
+    return null; // or appropriate fallback
+  }
+});
+```
+
+### UI Error Handling
+Settings windows use the `withApiCall()` wrapper pattern:
+
+```javascript
+async function handleApiCall() {
+  await withApiCall(button, async () => {
+    const result = await window.electronAPI.someCall();
+    showStatus(result.message, !result.success);
+  });
+}
+```
+
+## Type Safety Standards
+
+### Schema-First Configuration
+Use Zod schemas for runtime validation in [src/config/user-config.ts](mdc:src/config/user-config.ts):
+
+```typescript
+const ConfigSchema = z.object({
+  field: z.string().min(1),
+});
+
+type Config = z.infer<typeof ConfigSchema>;
+```
+
+### Interface Definitions
+Define interfaces for complex configurations:
+
+```typescript
+interface WindowConfig {
+  width: number;
+  height: number;
+  title: string;
+  // ... other properties
+}
+```
+
+## Code Duplication Elimination
+
+### Helper Functions
+Extract common patterns into helper functions:
+
+```javascript
+// Before: Repetitive try/catch blocks
+// After: Single withApiCall() wrapper
+
+function withApiCall(button, apiFunction) {
+  return async () => {
+    setButtonLoading(button, true);
+    try {
+      await apiFunction();
+    } catch (error) {
+      showStatus(error.message, true);
+    } finally {
+      setButtonLoading(button, false);
+    }
+  };
+}
+```
+
+### Factory Patterns
+Use factory functions for object creation:
+
+```typescript
+function createWindow(config: WindowConfig): BrowserWindow {
+  return new BrowserWindow({
+    width: config.width,
+    height: config.height,
+    // ... consistent defaults
+  });
+}
+```
+
+## File Structure Standards
+
+### Import Organization
+Organize imports in this order:
+1. Node.js built-in modules
+2. Third-party packages
+3. Local modules (relative imports)
+
+```typescript
+import path from 'path';
+import { app, BrowserWindow } from 'electron';
+import { loadUserConfig } from './config/user-config';
+```
+
+### Section Separators
+Use consistent section separators:
+
+```typescript
+// ============================================================================
+// SECTION NAME
+// ============================================================================
+```
+
+## Cross-Platform Compatibility
+
+### Path Handling
+Always use proper path construction:
+
+```typescript
+// Good: Cross-platform path handling
+const configPath = path.join(userDataDir, CONFIG_FILE_NAME);
+
+// Bad: Platform-specific path separators
+const configPath = userDataDir + '/' + CONFIG_FILE_NAME;
+```
+
+### Environment Detection
+Handle both Electron and Node.js contexts:
+
+```typescript
+function getConfigPath(): string {
+  try {
+    // Try Electron context
+    const { app } = require('electron');
+    return path.join(app.getPath('userData'), CONFIG_FILE_NAME);
+  } catch (error) {
+    // Fallback for Node.js context
+    return getUserDataPath();
+  }
+}
+```
+
+## Testing and Validation
+
+### Configuration Validation
+Always validate configuration before use:
+
+```typescript
+if (!userConfig || !isConfigValid(userConfig)) {
+  // Handle invalid configuration
+  createSettingsWindow();
+  return;
+}
+```
+
+### API Testing
+Provide live testing for external APIs:
+
+```typescript
+async function testApiConnection(config) {
+  try {
+    // Actual API call for validation
+    const result = await api.test(config);
+    return { success: true, message: 'Connection successful' };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+}
+```
+
+## Performance Considerations
+
+### Lazy Loading
+Use dynamic imports for optional dependencies:
+
+```typescript
+// Only load when needed
+const { OpenAI } = await import('openai');
+```
+
+### Resource Management
+Properly clean up resources:
+
+```typescript
+window.on('closed', () => {
+  window = null; // Clear reference
+});
+```
+
+## Security Best Practices
+
+### Context Isolation
+All renderer processes use context isolation:
+
+```typescript
+webPreferences: {
+  contextIsolation: true,
+  nodeIntegration: false,
+  preload: path.join(__dirname, preloadFile),
+}
+```
+
+### Configuration Security
+- Store sensitive data in user data directory
+- Never bundle API keys in the application
+- Validate all IPC communication
+
+## Documentation Standards
+
+### Code Comments
+- Explain **why**, not **what**
+- Document complex business logic
+- Include examples for non-obvious usage
+
+### Function Documentation
+```typescript
+/**
+ * Creates a new window with consistent security defaults
+ * @param config Window configuration options
+ * @returns The created BrowserWindow instance
+ */
+function createWindow(config: WindowConfig): BrowserWindow {
+  // Implementation
+}
+```
+
+## Refactoring Guidelines
+
+### When to Refactor
+- Functions exceed 50 lines
+- Code is duplicated 3+ times
+- Complex conditional logic
+- Mixed concerns in single function
+
+### Refactoring Process
+1. Identify patterns of duplication
+2. Extract helper functions
+3. Create type-safe interfaces
+4. Add comprehensive error handling
+5. Test thoroughly before committing

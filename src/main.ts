@@ -17,169 +17,206 @@ let settingsWindow: BrowserWindow | null = null;
 let topicSettingsWindow: BrowserWindow | null = null;
 let userConfig: UserConfig | null = null;
 
-// Setup IPC handlers for settings
-ipcMain.handle('settings:load-config', async () => {
-  try {
-    return loadUserConfig();
-  } catch (error) {
-    console.error('Error loading config via IPC:', error);
-    return null;
-  }
-});
+// ============================================================================
+// IPC HANDLERS
+// ============================================================================
 
-ipcMain.handle('settings:save-config', async (event, config: UserConfig) => {
-  try {
-    const success = saveUserConfig(config);
-    if (success) {
-      userConfig = config;
-      // Notify settings window that config was saved
-      if (settingsWindow && !settingsWindow.isDestroyed()) {
-        settingsWindow.webContents.send('settings:config-saved');
+/**
+ * Setup all IPC handlers organized by functionality
+ */
+function setupIpcHandlers(): void {
+  // Settings Configuration Handlers
+  setupConfigHandlers();
+  
+  // API Testing Handlers
+  setupApiTestHandlers();
+  
+  // Window Management Handlers
+  setupWindowHandlers();
+  
+  // Backward Compatibility Handlers
+  setupLegacyHandlers();
+}
+
+/**
+ * Handlers for configuration loading, saving, and validation
+ */
+function setupConfigHandlers(): void {
+  ipcMain.handle('settings:load-config', async () => {
+    try {
+      return loadUserConfig();
+    } catch (error) {
+      console.error('Error loading config via IPC:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('settings:save-config', async (event, config: UserConfig) => {
+    try {
+      const success = saveUserConfig(config);
+      if (success) {
+        userConfig = config;
+        // Notify settings window that config was saved
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send('settings:config-saved');
+        }
       }
-    }
-    return success;
-  } catch (error) {
-    console.error('Error saving config via IPC:', error);
-    return false;
-  }
-});
-
-ipcMain.handle('settings:test-firebase', async (event, firebaseConfig: UserConfig['firebase']) => {
-  try {
-    // Test Firebase connection by attempting to initialize
-    const { initializeApp } = await import('firebase/app');
-    const { getFirestore, connectFirestoreEmulator } = await import('firebase/firestore');
-    
-    const testApp = initializeApp(firebaseConfig, 'test-app');
-    const testDb = getFirestore(testApp);
-    
-    // If we get here without error, Firebase config is valid
-    return { success: true, message: 'Firebase configuration is valid' };
-  } catch (error: any) {
-    console.error('Firebase test failed:', error);
-    return { success: false, message: error.message || 'Firebase connection failed' };
-  }
-});
-
-ipcMain.handle('settings:test-openai', async (event, openaiConfig: UserConfig['openai']) => {
-  try {
-    const { OpenAI } = await import('openai');
-    const client = new OpenAI({
-      apiKey: openaiConfig.apiKey,
-    });
-
-    // Test with a minimal API call
-    await client.models.list();
-    
-    return { success: true, message: 'OpenAI connection successful' };
-  } catch (error: any) {
-    console.error('OpenAI test failed:', error);
-    let message = 'OpenAI connection failed';
-    
-    if (error.status === 401) {
-      message = 'Invalid API key';
-    } else if (error.status === 403) {
-      message = 'API key lacks necessary permissions';
-    } else if (error.status === 429) {
-      message = 'Rate limit exceeded';
-    } else if (error.message) {
-      message = error.message;
-    }
-    
-    return { success: false, message };
-  }
-});
-
-ipcMain.on('settings:close-window', () => {
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.close();
-  }
-});
-
-// IPC handler for opening topic settings
-ipcMain.on('settings:open-topic-settings', () => {
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.close();
-  }
-  if (!topicSettingsWindow || topicSettingsWindow.isDestroyed()) {
-    createTopicSettingsWindow();
-  } else {
-    topicSettingsWindow.focus();
-  }
-});
-
-// IPC handler for saving topic settings
-ipcMain.handle('save-topic-settings', async (event, settings: { topicDescription: string }) => {
-  try {
-    const currentConfig = loadUserConfig();
-    if (!currentConfig) {
-      console.error('No user config found for topic settings update');
+      return success;
+    } catch (error) {
+      console.error('Error saving config via IPC:', error);
       return false;
     }
+  });
 
-    // Update the app settings
-    currentConfig.appSettings.topicDescription = settings.topicDescription;
-    
-    const success = saveUserConfig(currentConfig);
-    if (success) {
-      userConfig = currentConfig;
-      console.log('Topic settings saved successfully');
+  ipcMain.handle('save-topic-settings', async (event, settings: { topicDescription: string }) => {
+    try {
+      const currentConfig = loadUserConfig();
+      if (!currentConfig) {
+        console.error('No user config found for topic settings update');
+        return false;
+      }
+
+      // Update the app settings
+      currentConfig.appSettings.topicDescription = settings.topicDescription;
+      
+      const success = saveUserConfig(currentConfig);
+      if (success) {
+        userConfig = currentConfig;
+        console.log('Topic settings saved successfully');
+      }
+      return success;
+    } catch (error) {
+      console.error('Error saving topic settings:', error);
+      return false;
     }
-    return success;
-  } catch (error) {
-    console.error('Error saving topic settings:', error);
-    return false;
-  }
-});
+  });
 
-// IPC handler for loading config (for topic settings)
-ipcMain.handle('load-config', async () => {
-  try {
-    return loadUserConfig();
-  } catch (error) {
-    console.error('Error loading config for topic settings:', error);
-    return null;
-  }
-});
+  ipcMain.handle('load-config', async () => {
+    try {
+      return loadUserConfig();
+    } catch (error) {
+      console.error('Error loading config for topic settings:', error);
+      return null;
+    }
+  });
+}
 
-// IPC handler for closing topic settings window
-ipcMain.on('close-settings', () => {
-  if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
-    topicSettingsWindow.close();
-  }
-});
+/**
+ * Handlers for testing API connections (Firebase and OpenAI)
+ */
+function setupApiTestHandlers(): void {
+  ipcMain.handle('settings:test-firebase', async (event, firebaseConfig: UserConfig['firebase']) => {
+    try {
+      // Test Firebase connection by attempting to initialize
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, connectFirestoreEmulator } = await import('firebase/firestore');
+      
+      const testApp = initializeApp(firebaseConfig, 'test-app');
+      const testDb = getFirestore(testApp);
+      
+      // If we get here without error, Firebase config is valid
+      return { success: true, message: 'Firebase configuration is valid' };
+    } catch (error: any) {
+      console.error('Firebase test failed:', error);
+      return { success: false, message: error.message || 'Firebase connection failed' };
+    }
+  });
 
-// IPC handler for opening API settings from topic settings
-ipcMain.on('open-api-settings', () => {
-  if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
-    topicSettingsWindow.close();
-  }
-  if (!settingsWindow || settingsWindow.isDestroyed()) {
-    createSettingsWindow();
-  } else {
-    settingsWindow.focus();
-  }
-});
+  ipcMain.handle('settings:test-openai', async (event, openaiConfig: UserConfig['openai']) => {
+    try {
+      const { OpenAI } = await import('openai');
+      const client = new OpenAI({
+        apiKey: openaiConfig.apiKey,
+      });
 
-// Handle opening settings from main interface
-ipcMain.on('open-settings', () => {
-  if (!settingsWindow || settingsWindow.isDestroyed()) {
-    createSettingsWindow();
-  } else {
-    settingsWindow.focus();
-  }
-});
+      // Test with a minimal API call
+      await client.models.list();
+      
+      return { success: true, message: 'OpenAI connection successful' };
+    } catch (error: any) {
+      console.error('OpenAI test failed:', error);
+      let message = 'OpenAI connection failed';
+      
+      if (error.status === 401) {
+        message = 'Invalid API key';
+      } else if (error.status === 403) {
+        message = 'API key lacks necessary permissions';
+      } else if (error.status === 429) {
+        message = 'Rate limit exceeded';
+      } else if (error.message) {
+        message = error.message;
+      }
+      
+      return { success: false, message };
+    }
+  });
+}
 
-// Setup IPC handler for Firebase config (for backward compatibility with renderer)
-ipcMain.handle('get-firebase-config', () => {
-  if (!userConfig) {
-    console.error('No user config available for Firebase');
-    return null;
-  }
-  
-  console.log('Main: Providing Firebase config via IPC:', userConfig.firebase.projectId);
-  return userConfig.firebase;
-});
+/**
+ * Handlers for window management (opening, closing, navigation)
+ */
+function setupWindowHandlers(): void {
+  ipcMain.on('settings:close-window', () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.close();
+    }
+  });
+
+  ipcMain.on('settings:open-topic-settings', () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.close();
+    }
+    if (!topicSettingsWindow || topicSettingsWindow.isDestroyed()) {
+      createTopicSettingsWindow();
+    } else {
+      topicSettingsWindow.focus();
+    }
+  });
+
+  ipcMain.on('close-settings', () => {
+    if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
+      topicSettingsWindow.close();
+    }
+  });
+
+  ipcMain.on('open-api-settings', () => {
+    if (topicSettingsWindow && !topicSettingsWindow.isDestroyed()) {
+      topicSettingsWindow.close();
+    }
+    if (!settingsWindow || settingsWindow.isDestroyed()) {
+      createSettingsWindow();
+    } else {
+      settingsWindow.focus();
+    }
+  });
+
+  ipcMain.on('open-settings', () => {
+    if (!settingsWindow || settingsWindow.isDestroyed()) {
+      createSettingsWindow();
+    } else {
+      settingsWindow.focus();
+    }
+  });
+}
+
+/**
+ * Legacy handlers for backward compatibility with renderer
+ */
+function setupLegacyHandlers(): void {
+  ipcMain.handle('get-firebase-config', () => {
+    if (!userConfig) {
+      console.error('No user config available for Firebase');
+      return null;
+    }
+    
+    console.log('Main: Providing Firebase config via IPC:', userConfig.firebase.projectId);
+    return userConfig.firebase;
+  });
+}
+
+// ============================================================================
+// WINDOW CREATION
+// ============================================================================
 
 // Window creation configuration interface
 interface WindowConfig {
@@ -402,6 +439,9 @@ function runWorkflow(): void {
 
 // Function to initialize the application
 async function initializeApp(): Promise<void> {
+  // Setup IPC handlers first
+  setupIpcHandlers();
+  
   // Try to load existing configuration
   userConfig = loadUserConfig();
   

@@ -4,13 +4,19 @@ Based on a review of the `src` directory, here are several parts of the codebase
 
 ---
 
-### 1. Centralize IPC Handlers in `main.ts`
+### 1. Centralize IPC Handlers in `main.ts` ✅ **COMPLETED**
 
 -   **Location**: `src/main.ts`
 -   **Problem**: The main process file has numerous `ipcMain.handle` and `ipcMain.on` calls at the top level, mixing concerns from different features (API settings, topic settings, etc.). This clutters the file and makes it difficult to maintain as new features are added.
 -   **Proposed Refactor**: Group related IPC handlers into dedicated functions or modules.
     -   Create functions like `setupSettingsIpcHandlers()` and `setupTopicSettingsIpcHandlers()` within `main.ts`.
     -   For a cleaner architecture, move these groups of handlers into separate files (e.g., `src/ipc/settings.ts`, `src/ipc/topic-settings.ts`) and import them into the main process. This makes `main.ts` a high-level orchestrator and clarifies which handlers belong to which feature.
+-   **Implementation**: Created organized IPC handler functions grouped by functionality:
+    -   `setupConfigHandlers()` - Configuration loading, saving, and validation
+    -   `setupApiTestHandlers()` - Firebase and OpenAI connection testing
+    -   `setupWindowHandlers()` - Window management (opening, closing, navigation)
+    -   `setupLegacyHandlers()` - Backward compatibility handlers
+    -   All handlers are now centralized in a dedicated section with clear documentation and called during app initialization.
 
 ---
 
