@@ -181,98 +181,123 @@ ipcMain.handle('get-firebase-config', () => {
   return userConfig.firebase;
 });
 
-// Function to create settings window
-function createSettingsWindow(): void {
-  settingsWindow = new BrowserWindow({
-    width: 700,
-    height: 800,
-    resizable: false,
-    modal: true,
-    parent: mainWindow || undefined,
+// Window creation configuration interface
+interface WindowConfig {
+  width: number;
+  height: number;
+  title: string;
+  htmlFile: string;
+  preloadFile: string;
+  resizable?: boolean;
+  modal?: boolean;
+  parent?: BrowserWindow;
+  showMenuBar?: boolean;
+  onClosed?: () => void;
+  postCreate?: (window: BrowserWindow) => void;
+}
+
+/**
+ * Factory function to create windows with consistent configuration
+ * @param config - Window configuration options
+ * @returns The created BrowserWindow instance
+ */
+function createWindow(config: WindowConfig): BrowserWindow {
+  // Base window options with security defaults
+  const windowOptions: Electron.BrowserWindowConstructorOptions = {
+    width: config.width,
+    height: config.height,
+    title: config.title,
+    resizable: config.resizable ?? true,
+    modal: config.modal ?? false,
+    parent: config.parent,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'windows', 'settings-preload.js'),
+      preload: path.join(__dirname, config.preloadFile),
     },
-    title: 'Adjutant Settings',
-  });
+  };
 
-  settingsWindow.loadFile(path.join(__dirname, 'windows', 'settings.html'));
-  
-  // Remove menu bar from settings window
-  settingsWindow.setMenuBarVisibility(false);
+  // Create the window
+  const window = new BrowserWindow(windowOptions);
 
-  // Handle settings window closed
-  settingsWindow.on('closed', () => {
-    settingsWindow = null;
-  });
+  // Load the HTML file
+  window.loadFile(path.join(__dirname, config.htmlFile));
 
-  // Open DevTools for debugging in development
-  if (APP_CONFIG.DEV_TOOLS_OPEN) {
-    settingsWindow.webContents.openDevTools();
+  // Set menu bar visibility
+  if (config.showMenuBar === false) {
+    window.setMenuBarVisibility(false);
   }
+
+  // Handle window closed event
+  if (config.onClosed) {
+    window.on('closed', config.onClosed);
+  }
+
+  // Open DevTools in development
+  if (APP_CONFIG.DEV_TOOLS_OPEN) {
+    window.webContents.openDevTools();
+  }
+
+  // Execute post-creation callback if provided
+  if (config.postCreate) {
+    config.postCreate(window);
+  }
+
+  return window;
+}
+
+// Function to create settings window
+function createSettingsWindow(): void {
+  settingsWindow = createWindow({
+    width: 700,
+    height: 800,
+    title: 'Adjutant Settings',
+    htmlFile: 'windows/settings.html',
+    preloadFile: 'windows/settings-preload.js',
+    resizable: false,
+    modal: true,
+    parent: mainWindow || undefined,
+    showMenuBar: false,
+    onClosed: () => {
+      settingsWindow = null;
+    },
+  });
 }
 
 // Function to create topic settings window
 function createTopicSettingsWindow(): void {
-  topicSettingsWindow = new BrowserWindow({
+  topicSettingsWindow = createWindow({
     width: 600,
     height: 700,
+    title: 'Topic Settings - Adjutant',
+    htmlFile: 'windows/topic-settings.html',
+    preloadFile: 'windows/topic-settings-preload.js',
     resizable: false,
     modal: true,
     parent: mainWindow || undefined,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'windows', 'topic-settings-preload.js'),
+    showMenuBar: false,
+    onClosed: () => {
+      topicSettingsWindow = null;
     },
-    title: 'Topic Settings - Adjutant',
   });
-
-  topicSettingsWindow.loadFile(path.join(__dirname, 'windows', 'topic-settings.html'));
-  
-  // Remove menu bar from settings window
-  topicSettingsWindow.setMenuBarVisibility(false);
-
-  // Handle topic settings window closed
-  topicSettingsWindow.on('closed', () => {
-    topicSettingsWindow = null;
-  });
-
-  // Open DevTools for debugging in development
-  if (APP_CONFIG.DEV_TOOLS_OPEN) {
-    topicSettingsWindow.webContents.openDevTools();
-  }
 }
 
 // Function to create the main application window
 function createMainWindow(): void {
-  mainWindow = new BrowserWindow({
+  mainWindow = createWindow({
     width: APP_CONFIG.WINDOW_CONFIG.width,
     height: APP_CONFIG.WINDOW_CONFIG.height,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-    },
     title: 'Adjutant - AI News Aggregator',
+    htmlFile: '../index.html',
+    preloadFile: 'preload.js',
+    onClosed: () => {
+      mainWindow = null;
+    },
+    postCreate: (window) => {
+      // Create application menu for main window
+      createApplicationMenu();
+    },
   });
-
-  // Load the index.html file into the window
-  mainWindow.loadFile(path.join(__dirname, '../index.html'));
-
-  // Create application menu
-  createApplicationMenu();
-
-  // Handle main window closed
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // Open DevTools for debugging in development
-  if (APP_CONFIG.DEV_TOOLS_OPEN) {
-    mainWindow.webContents.openDevTools();
-  }
 }
 
 // Function to create application menu
