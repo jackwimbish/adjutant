@@ -233,13 +233,17 @@ function formatDate(dateInput) {
         let date;
         
         if (dateInput && typeof dateInput.toDate === 'function') {
-            // Firestore Timestamp
+            // Firestore Timestamp object with toDate method
             date = dateInput.toDate();
+        } else if (dateInput && typeof dateInput === 'object' && dateInput.seconds) {
+            // Firebase Timestamp object with seconds and nanoseconds
+            date = new Date(dateInput.seconds * 1000 + (dateInput.nanoseconds || 0) / 1000000);
         } else if (dateInput instanceof Date) {
             date = dateInput;
         } else if (typeof dateInput === 'string' || typeof dateInput === 'number') {
             date = new Date(dateInput);
         } else {
+            console.warn('Unknown date format:', dateInput);
             return 'Unknown';
         }
         
@@ -251,7 +255,7 @@ function formatDate(dateInput) {
             minute: '2-digit'
         });
     } catch (error) {
-        console.warn('Error formatting date:', error);
+        console.warn('Error formatting date:', error, dateInput);
         return 'Unknown';
     }
 }
