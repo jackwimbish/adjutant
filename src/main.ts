@@ -481,6 +481,32 @@ function setupWindowHandlers(): void {
       focusedWindow.close();
     }
   });
+
+  // Rerate articles handler
+  ipcMain.handle('rerate-articles', async () => {
+    try {
+      if (!userConfig) {
+        console.error('Cannot rerate articles - no user configuration');
+        return { success: false, message: 'No user configuration available' };
+      }
+      
+      console.log('🔄 Starting rerate articles workflow...');
+      
+      const { rerateArticles } = await import('./services/rerate-service');
+      const result = await rerateArticles(userConfig);
+      
+      console.log(`✅ Rerate articles completed: ${result.processed} articles processed`);
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Error in rerate articles workflow:', error);
+      return { 
+        success: false, 
+        message: `Rerate articles failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        processed: 0
+      };
+    }
+  });
 }
 
 /**

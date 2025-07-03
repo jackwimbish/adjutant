@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Expose method to open profile management window
   openProfileManagement: () => ipcRenderer.send('open-profile-management'),
+  
+  // Expose method to rerate articles
+  rerateArticles: () => ipcRenderer.invoke('rerate-articles'),
 });
 
 // Expose a promise-based Firebase config getter

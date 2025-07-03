@@ -360,6 +360,46 @@
             box-shadow: none;
         }
         
+        /* Rerate Articles button styles */
+        .rerate-btn {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: #FF9800;
+            border: 1px solid #FF9800;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+            margin-right: 10px;
+        }
+        .rerate-btn:hover {
+            background-color: #FF9800;
+            color: var(--background-color);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+        }
+        .rerate-btn:active {
+            transform: translateY(0);
+        }
+        .rerate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .rerate-btn:disabled:hover {
+            background-color: var(--primary-color);
+            color: #FF9800;
+            transform: none;
+            box-shadow: none;
+        }
+        
         /* Header controls layout */
         .header-controls {
             display: flex;
@@ -390,6 +430,9 @@
                 </button>
                 <button id="profile-management-btn" class="profile-btn" disabled>
                     👤 Profile
+                </button>
+                <button id="rerate-btn" class="rerate-btn" disabled>
+                    🔄 Rerate Articles
                 </button>
                 <button id="trash-btn" class="trash-btn">
                     🗑️ Trash
@@ -633,7 +676,7 @@
             }
         }
 
-        // Check if profile exists for profile management button
+        // Check if profile exists for profile management and rerate buttons
         async function checkProfileExists() {
             if (!window.electronAPI || !window.electronAPI.getProfile) {
                 console.log('HTML: electronAPI.getProfile not available');
@@ -643,6 +686,7 @@
             try {
                 const result = await window.electronAPI.getProfile();
                 const profileManagementBtn = document.getElementById('profile-management-btn');
+                const rerateBtn = document.getElementById('rerate-btn');
                 
                 if (profileManagementBtn) {
                     if (result.success && result.profile) {
@@ -653,6 +697,18 @@
                         console.log('HTML: No profile found - disabling Profile Management button');
                         profileManagementBtn.disabled = true;
                         profileManagementBtn.title = 'Disabled: No profile available';
+                    }
+                }
+                
+                if (rerateBtn) {
+                    if (result.success && result.profile) {
+                        console.log('HTML: Profile exists - enabling Rerate Articles button');
+                        rerateBtn.disabled = false;
+                        rerateBtn.title = 'Re-rate all articles with your current profile';
+                    } else {
+                        console.log('HTML: No profile found - disabling Rerate Articles button');
+                        rerateBtn.disabled = true;
+                        rerateBtn.title = 'Disabled: No profile available';
                     }
                 }
             } catch (error) {
@@ -681,6 +737,68 @@
                 });
             }
         }
+
+        // Add rerate articles button click handler
+        function setupRerateButton() {
+            const rerateBtn = document.getElementById('rerate-btn');
+            if (rerateBtn) {
+                rerateBtn.addEventListener('click', async () => {
+                    console.log('HTML: Rerate Articles button clicked');
+                    
+                    // Check if button is disabled (no profile available)
+                    if (rerateBtn.disabled) {
+                        console.log('HTML: Rerate Articles button is disabled - ignoring click');
+                        return;
+                    }
+                    
+                    if (!window.electronAPI || !window.electronAPI.rerateArticles) {
+                        console.error('HTML: electronAPI.rerateArticles not available');
+                        return;
+                    }
+
+                    // Disable button and show loading state
+                    rerateBtn.disabled = true;
+                    const originalText = rerateBtn.textContent;
+                    rerateBtn.textContent = '🔄 Re-rating...';
+
+                    try {
+                        const result = await window.electronAPI.rerateArticles();
+                        
+                        if (result.success) {
+                            console.log('HTML: Articles re-rated successfully');
+                            rerateBtn.textContent = `✅ Re-rated ${result.processed} articles`;
+                            
+                            // Reset button after showing success
+                            setTimeout(() => {
+                                rerateBtn.textContent = originalText;
+                                rerateBtn.disabled = false;
+                            }, 3000);
+                        } else {
+                            console.error('HTML: Failed to rerate articles:', result.message);
+                            rerateBtn.textContent = '❌ Re-rating Failed';
+                            
+                            // Show error message to user
+                            alert(`Re-rating failed: ${result.message}`);
+                            
+                            // Reset button after showing error
+                            setTimeout(() => {
+                                rerateBtn.textContent = originalText;
+                                rerateBtn.disabled = false;
+                            }, 3000);
+                        }
+                    } catch (error) {
+                        console.error('HTML: Error re-rating articles:', error);
+                        rerateBtn.textContent = '❌ Error';
+                        
+                        // Reset button after showing error
+                        setTimeout(() => {
+                            rerateBtn.textContent = originalText;
+                            rerateBtn.disabled = false;
+                        }, 3000);
+                    }
+                });
+            }
+        }
         
         // Start when page loads
         if (document.readyState === 'loading') {
@@ -690,6 +808,7 @@
                 setupFetchButton();
                 setupProfileButton();
                 setupProfileManagementButton();
+                setupRerateButton();
                 setupTrashButton();
                 loadRendererWithConfig();
                 // Check threshold after a delay to ensure renderer is loaded
@@ -701,6 +820,7 @@
             setupFetchButton();
             setupProfileButton();
             setupProfileManagementButton();
+            setupRerateButton();
             setupTrashButton();
             loadRendererWithConfig();
             // Check threshold after a delay to ensure renderer is loaded
