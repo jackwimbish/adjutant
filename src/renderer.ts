@@ -34,6 +34,7 @@ interface ArticleData {
   read: boolean;
   created_at: Date;
   rated_at?: Date;
+  source_name?: string;  // Add source name field
 }
 
 console.log('Renderer script loaded.');
@@ -122,15 +123,16 @@ function setupArticleListeners(): void {
     snapshot.forEach((doc: any) => {
       const data = doc.data();
       articles.push({
-        url: doc.id,
+        url: data.url || doc.id,                             // Fixed: use actual URL from data, not document ID
         title: data.title || 'No title',
-        summary: data.summary || 'No summary available',
-        content: data.content || '',
-        score: data.score || 0,
+        summary: data.ai_summary || 'No summary available',  // Fixed: ai_summary -> summary
+        content: data.full_content_text || '',               // Fixed: full_content_text -> content
+        score: data.ai_score || 0,                           // Fixed: ai_score -> score
         relevant: data.relevant,
-        read: data.read || false,
-        created_at: data.created_at?.toDate() || new Date(),
-        rated_at: data.rated_at?.toDate()
+        read: data.is_read || false,                         // Fixed: is_read -> read
+        created_at: data.published_at?.toDate() || new Date(), // Fixed: published_at -> created_at
+        rated_at: data.rated_at?.toDate(),
+        source_name: data.source_name || 'Unknown Source'    // Added: source_name mapping
       });
     });
     
@@ -153,15 +155,16 @@ function setupArticleListeners(): void {
     snapshot.forEach((doc: any) => {
       const data = doc.data();
       articles.push({
-        url: doc.id,
+        url: data.url || doc.id,                             // Fixed: use actual URL from data, not document ID
         title: data.title || 'No title',
-        summary: data.summary || 'No summary available',
-        content: data.content || '',
-        score: data.score || 0,
+        summary: data.ai_summary || 'No summary available',  // Fixed: ai_summary -> summary
+        content: data.full_content_text || '',               // Fixed: full_content_text -> content
+        score: data.ai_score || 0,                           // Fixed: ai_score -> score
         relevant: data.relevant,
-        read: data.read || false,
-        created_at: data.created_at?.toDate() || new Date(),
-        rated_at: data.rated_at?.toDate()
+        read: data.is_read || false,                         // Fixed: is_read -> read
+        created_at: data.published_at?.toDate() || new Date(), // Fixed: published_at -> created_at
+        rated_at: data.rated_at?.toDate(),
+        source_name: data.source_name || 'Unknown Source'    // Added: source_name mapping
       });
     });
     
@@ -219,10 +222,17 @@ function createArticleHtml(article: ArticleData, type: 'unrated' | 'relevant'): 
       </button>
     `;
 
+  // Format the score display
+  const scoreDisplay = article.score > 0 ? `🧠 Score: ${article.score}/10` : '🧠 Score: N/A';
+  
   return `
     <div class="article${readClass}" data-url="${escapeHtml(article.url)}">
       <div class="article-header">
         <h3 class="article-title">${escapeHtml(article.title)}</h3>
+        <div class="article-meta">
+          <span class="source">📰 ${escapeHtml(article.source_name || 'Unknown Source')}</span>
+          <span class="score">${scoreDisplay}</span>
+        </div>
       </div>
       <p class="article-summary">${escapeHtml(article.summary)}</p>
       <div class="article-actions">
@@ -276,6 +286,17 @@ function setupArticleEventListeners(container: HTMLElement, type: 'unrated' | 'r
 }
 
 /**
+ * Create article ID from URL using SHA-256 hash (same as workflow)
+ */
+async function createArticleId(url: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(url);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * Handle marking an article as read
  */
 async function handleMarkAsRead(articleUrl: string, buttonElement: HTMLElement): Promise<void> {
@@ -284,8 +305,9 @@ async function handleMarkAsRead(articleUrl: string, buttonElement: HTMLElement):
   buttonElement.setAttribute('disabled', 'true');
   
   try {
-    await db.collection('articles').doc(articleUrl).update({
-      read: true
+    const articleId = await createArticleId(articleUrl);  // Hash the URL to get document ID
+    await db.collection('articles').doc(articleId).update({
+      is_read: true  // Fixed: use is_read field name that matches Firestore
     });
     
     console.log('✅ Article marked as read successfully');
@@ -305,7 +327,8 @@ async function handleRateArticle(articleUrl: string, isRelevant: boolean, button
   buttonElement.setAttribute('disabled', 'true');
   
   try {
-    await db.collection('articles').doc(articleUrl).update({
+    const articleId = await createArticleId(articleUrl);  // Hash the URL to get document ID
+    await db.collection('articles').doc(articleId).update({
       relevant: isRelevant,
       rated_at: (window as any).firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -333,7 +356,8 @@ async function handleUnrateArticle(articleUrl: string, buttonElement: HTMLElemen
   buttonElement.setAttribute('disabled', 'true');
   
   try {
-    await db.collection('articles').doc(articleUrl).update({
+    const articleId = await createArticleId(articleUrl);  // Hash the URL to get document ID
+    await db.collection('articles').doc(articleId).update({
       relevant: null,
       rated_at: (window as any).firebase.firestore.FieldValue.delete()
     });

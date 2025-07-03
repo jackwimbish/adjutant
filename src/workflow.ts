@@ -44,13 +44,19 @@ async function fetchArticlesFromSource(source: NewsSource): Promise<RSSItem[]> {
     const feed = await parser.parseURL(source.url);
     console.log(`Raw feed has ${feed.items.length} items`);
     
-    // Return items that have a link and some form of content
-    const articlesWithContent = feed.items.filter(item => 
-      item.link && (item.content || item.contentSnippet || item.summary)
+    // Return items that have a link and either content OR title (for content scraping)
+    // Some feeds (like Hugging Face) have minimal RSS with no content, relying on scraping
+    const articlesWithLink = feed.items.filter(item => 
+      item.link && item.title
     ) as RSSItem[];
-    console.log(`Found ${articlesWithContent.length} articles with content`);
     
-    return articlesWithContent;
+    // Limit to first 20 articles to avoid processing too many at once
+    const MAX_ARTICLES_PER_FEED = 20;
+    const limitedArticles = articlesWithLink.slice(0, MAX_ARTICLES_PER_FEED);
+    
+    console.log(`Found ${articlesWithLink.length} articles with links, processing first ${limitedArticles.length}`);
+    
+    return limitedArticles;
   } catch (error) {
     console.error(`Failed to fetch from ${source.url}:`, error);
     return [];
@@ -418,11 +424,10 @@ async function processArticles(articles: RSSItem[], source: NewsSource) {
 
 async function shouldSkipArticle(article: RSSItem): Promise<boolean> {
   if (!article.link) return true;
+  if (!article.title) return true;
   
-  // Get the best available content
-  const content = article.content || article.contentSnippet || article.summary || '';
-  if (!content) return true;
-  
+  // For minimal RSS feeds (like Hugging Face), we rely on content scraping
+  // so we don't require content to be present in the RSS feed itself
   return false;
 }
 

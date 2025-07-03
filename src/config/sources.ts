@@ -10,6 +10,10 @@ export const DEFAULT_SOURCES: NewsSource[] = [
     url: 'https://towardsdatascience.com/feed', 
     type: 'RSS' 
   },
+  { 
+    name: 'Hugging Face Blog', 
+    url: 'https://huggingface.co/blog/feed.xml', 
+    type: 'RSS' 
+  },
   // Future sources can be added here
-  // { name: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml', type: 'RSS' },
 ]; 

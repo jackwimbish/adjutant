@@ -9,10 +9,12 @@ export async function preprocessArticle(state: AnalysisState): Promise<Partial<A
                     state.article.contentSnippet || 
                     state.article.summary || '';
   
+  // For minimal RSS feeds (like Hugging Face), allow articles with no content
+  // Content scraping will be attempted in the next step
   if (!rawContent) {
+    console.log('No RSS content found, proceeding to content scraping...');
     return {
-      should_skip: true,
-      error: 'No content available for analysis'
+      content: '' // Empty content, will rely on content scraping
     };
   }
   
@@ -21,9 +23,9 @@ export async function preprocessArticle(state: AnalysisState): Promise<Partial<A
   const truncatedContent = cleanedContent.substring(0, CONFIG.AI_CONTENT_MAX_LENGTH);
   
   if (truncatedContent.length < 50) {
+    console.log('RSS content too short, proceeding to content scraping...');
     return {
-      should_skip: true,
-      error: 'Content too short for meaningful analysis'
+      content: truncatedContent // Keep what we have, content scraping may provide more
     };
   }
   
