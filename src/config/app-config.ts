@@ -5,5 +5,5 @@ export const APP_CONFIG = {
     width: 1200,
     height: 800,
   },
-  DEV_TOOLS_OPEN: true, // Force dev tools open for debugging
+  DEV_TOOLS_OPEN: false, // Dev tools can be opened manually with F12 or Cmd+Option+I
 }; 

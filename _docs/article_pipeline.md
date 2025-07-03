@@ -189,17 +189,16 @@ The main workflow orchestrator coordinates the processing paths:
 flowchart TD
     A[RSS Feed Fetch] --> B{Profile Exists?}
     B -->|No| C[Topic-Only Analysis]
-    B -->|Yes| D[Traditional Analysis + Adaptive Scorer]
+    B -->|Yes| D[Traditional Analysis Workflow]
     
     C --> C1[Content Scraping]
     C1 --> C2{Topic Relevant?}
     C2 -->|No| C3[Mark topic_filtered=true, Eject]
     C2 -->|Yes| C4[GPT-4o-mini Basic Summary, Score=5]
     
-    D --> D1[Traditional Analysis Workflow]
-    D1 --> D2[Content Scraping + GPT-4o Analysis]
-    D2 --> D3[Adaptive Scorer Workflow]
-    D3 --> H[Load Profile]
+    D --> D1[Preprocess → Analyze → Quality Check → Content Scraping]
+    D1 --> D2[Adaptive Scorer Workflow]
+    D2 --> H[Load Profile]
     H --> I[GPT-4o-mini Topic Filter]
     I -->|Relevant| J[GPT-4o Profile Scoring]
     I -->|Not Relevant| K[Mark topic_filtered=true, Eject]
