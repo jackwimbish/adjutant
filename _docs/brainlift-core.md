@@ -1,5 +1,7 @@
 # Adjutant Project Documentation
 
+For the full brainlift conversation, see here: https://g.co/gemini/share/06ae8604f9ad
+
 ## Overview
 
 Adjutant is an intelligent desktop application designed to manage and summarize news on AI and technology. The application serves as an intelligent assistant that sorts through information and presents the most important intelligence, tackling the common problem of information overload in the rapidly evolving AI and technology landscape.
