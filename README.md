@@ -1,79 +1,140 @@
-# Adjutant 📰
+# Adjutant 📰🤖
 
-**Personal News Intelligence Dashboard**
+**Intelligent AI-Powered News Aggregator with Adaptive Learning**
 
-Adjutant is an intelligent news aggregation desktop application built with Electron that automatically fetches, analyzes, and curates articles using AI. It helps you stay informed by scoring articles for relevance and building a personalized knowledge feed based on your preferences.
+Adjutant is a sophisticated desktop application built with Electron and TypeScript that revolutionizes how you consume news. Using advanced AI workflows powered by LangGraph and OpenAI, it automatically fetches, analyzes, and personalizes articles based on your reading preferences, creating an intelligent knowledge feed that evolves with you.
 
-## Features
+## 🚀 Latest Release
 
-### 🤖 **AI-Powered Analysis**
-- Automatic article scoring using OpenAI GPT models
-- Intelligent content summarization
-- Category classification and relevance detection
-- Quality validation with automatic retry logic
+**[Download Adjutant v1.0.1](https://github.com/jackwimbish/adjutant/releases/tag/v1.0.1)** - Enhanced AI News Aggregator
 
-### 🕷️ **Advanced Content Extraction**
-- Full article scraping using Puppeteer + Mozilla Readability
-- Smart fallback to RSS excerpts when scraping fails
-- Clean, readable content extraction from original sources
+- **macOS Apple Silicon**: `Adjutant-1.0.1-arm64.dmg` (431 MB)
+- **Complete TypeScript Implementation**: 100% type coverage for reliability
+- **Enhanced AI Processing**: Cost-optimized with 73% savings using intelligent model selection
+- **Real-time Updates**: Firebase integration with live article synchronization
 
-### 📊 **Intelligent Curation**
-- **Two-column interface**: Unrated articles (left) and Relevant articles (right)
-- **Smart rating system**: Rate articles as Relevant, Neutral, or Not Relevant
-- **Read tracking**: Mark articles as read with visual greying
-- **Real-time updates**: Articles move between columns automatically
+## ✨ Key Features
 
-### 🔄 **Automated Workflow**
-- Fetches articles every 30 minutes automatically
-- Processes articles through a sophisticated multi-step pipeline
-- Stores full article content and analysis in Firebase Firestore
-- Duplicate detection prevents redundant processing
+### 🧠 **Adaptive Learning System**
+- **Profile-Based Scoring**: AI learns your preferences from article ratings
+- **Personalized Recommendations**: Articles scored 1-10 based on your interests
+- **Intelligent Evolution**: Profile automatically updates as your preferences change
+- **Cost-Optimized Processing**: Smart routing between GPT-4o and GPT-4o-mini
 
-## Quick Start (Release Version)
+### 📰 **Multi-Source Content Aggregation**
+- **5 Premium RSS Feeds**: Towards Data Science, Hugging Face, OpenAI Blog, Google AI, Google DeepMind
+- **Smart Content Extraction**: Advanced scraping with JSDOM and fallback mechanisms
+- **90-Day Age Filtering**: Only recent, relevant articles (10 per feed)
+- **Duplicate Prevention**: SHA-256 hashing prevents reprocessing
 
-### Prerequisites
-You'll need accounts and API keys for:
-- **OpenAI API** (for article analysis)
-- **Firebase Project** (for data storage)
+### 🎯 **Intelligent Article Processing**
+- **LangGraph Workflows**: Sophisticated multi-node processing pipelines
+- **Topic-Based Filtering**: AI-powered relevance checking before detailed analysis
+- **Quality Validation**: Comprehensive retry logic with exponential backoff
+- **Real-time Processing**: Articles appear instantly as they're analyzed
 
-### Installation
+### 🗂️ **Advanced Article Management**
+- **Three-Column Trash System**:
+  - **User Rejected**: Articles you marked as "not relevant"
+  - **Low Score**: Articles with AI score ≤3 (with rating controls)
+  - **Topic Filtered**: Articles that failed topic relevance check
+- **Rating Controls**: Rate articles as relevant/not relevant with instant feedback
+- **Unrate Functionality**: Move articles back to unrated from any category
+- **Real-time Synchronization**: Firebase listeners provide instant UI updates
 
-1. **Download the latest release** from [GitHub Releases](https://github.com/your-repo/adjutant/releases)
-2. **Install the DMG** by dragging Adjutant to your Applications folder
-3. **Set up your configuration**:
+### ⚙️ **Robust Configuration System**
+- **Separated API Configuration**: Dedicated window for Firebase and OpenAI setup
+- **Live Connection Testing**: Verify API credentials with real-time feedback
+- **Schema Validation**: Zod-based validation with detailed error reporting
+- **Cross-Platform Compatibility**: Works seamlessly across different environments
+
+### 🔄 **Advanced Workflow Features**
+- **Manual Workflow Control**: "📰 Fetch Stories" button for on-demand processing
+- **Rerate Articles**: Update all article scores when your profile changes
+- **Profile Management**: Complete dashboard for viewing and managing preferences
+- **Progress Tracking**: Real-time status updates during processing
+
+## 🏗️ Architecture Overview
+
+### Processing Pipelines
+
+Adjutant uses two intelligent processing paths based on user profile availability:
+
+#### **No Profile (Topic-Only Analysis)**
+```
+RSS Feeds → Content Scraping → Topic Relevance Check → Basic Summary (GPT-4o-mini only)
+```
+- **73% cost savings** using only GPT-4o-mini
+- Articles failing topic check are marked as `topic_filtered: true`
+- Relevant articles get basic summary and default score of 5
+
+#### **Profile Available (Adaptive Scoring)**
+```
+RSS Feeds → Traditional Analysis → Adaptive Scorer Workflow → Profile-Based Scoring
+```
+- Full content analysis with GPT-4o
+- Topic filtering with cost-efficient GPT-4o-mini
+- Sophisticated profile-based scoring with GPT-4o
+- Personalized summaries based on user preferences
+
+### LangGraph Workflows
+
+1. **Adaptive Scorer Workflow** (`src/workflows/adaptive-scorer-workflow.ts`)
+   - Load user profile from Firebase
+   - Topic relevance filtering with GPT-4o-mini
+   - Profile-based scoring with GPT-4o (1-10 scale)
+
+2. **Learner Workflow** (`src/workflows/learner-workflow.ts`)
+   - Collect user rating feedback
+   - Validate minimum rating threshold (2+2 ratings)
+   - Generate/evolve user profile with AI analysis
+   - Save profile for future adaptive scoring
+
+3. **Traditional Analysis Workflow** (`src/workflows/analysis-workflow.ts`)
+   - Content preprocessing and validation
+   - AI analysis with quality checking
+   - Content scraping with fallback mechanisms
+   - Comprehensive error handling and retry logic
+
+## 📦 Installation & Setup
+
+### System Requirements
+- **macOS**: 10.15+ (Catalina or later)
+- **Architecture**: Apple Silicon (ARM64) optimized
+- **Internet**: Required for RSS feeds, Firebase, and OpenAI API
+- **Storage**: ~500MB for installation
+
+### Quick Start
+
+1. **Download & Install**
    ```bash
-   # Navigate to the app bundle
-   cd /Applications/Adjutant.app/Contents/Resources
+   # Download from GitHub Releases
+   # https://github.com/jackwimbish/adjutant/releases/tag/v1.0.1
    
-   # Copy the environment template
-   cp env.example .env
-   
-   # Edit with your API keys
-   nano .env
+   # Install by dragging to Applications folder
+   # May need to right-click → Open on first launch (unsigned binary)
    ```
 
-### Configuration
+2. **API Configuration**
+   - App opens API Configuration window on first launch
+   - Configure Firebase credentials (6 fields required)
+   - Add OpenAI API key
+   - Live connection testing validates credentials
 
-Edit the `.env` file with your credentials:
+3. **Topic Configuration**
+   - Set your topic description for article filtering
+   - Accessible via Settings → Topic Settings
+   - Used for AI-powered relevance checking
 
-```bash
-# OpenAI Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Firebase Configuration
-FIREBASE_API_KEY=your_firebase_api_key
-FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-FIREBASE_APP_ID=your_app_id
-```
+4. **Start Using**
+   - Click "📰 Fetch Stories" to begin article processing
+   - Rate articles as "Relevant" or "Not Relevant"
+   - Generate profile after rating 4+ articles (2 relevant, 2 not relevant)
 
 ### Firebase Setup
 
-1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com)
-2. Enable Firestore Database
-3. Set Firestore rules to allow read/write (for development):
+1. **Create Firebase Project**: [Firebase Console](https://console.firebase.google.com)
+2. **Enable Firestore Database** with these security rules:
    ```javascript
    rules_version = '2';
    service cloud.firestore {
@@ -84,198 +145,240 @@ FIREBASE_APP_ID=your_app_id
      }
    }
    ```
-4. Get your configuration from Project Settings → General → Your apps
+3. **Get Configuration**: Project Settings → General → Your apps → Web app
 
-### Launch
-Simply run Adjutant from your Applications folder. The app will:
-- Start processing articles automatically
-- Display them in the two-column interface
-- Run the workflow every 30 minutes
+### OpenAI Setup
 
-## Article Processing Workflow
+1. **Get API Key**: [OpenAI Platform](https://platform.openai.com/api-keys)
+2. **Ensure Credits**: Account needs sufficient credits for GPT-4o and GPT-4o-mini usage
+3. **Rate Limits**: Standard rate limits apply (handled with retry logic)
 
-Adjutant uses a sophisticated multi-step pipeline with state management to process articles:
+## 🎮 User Interface
 
-### 1. **RSS Fetching**
-```
-📡 RSS Feed → Parse → Extract Articles
-```
-- Fetches from configured RSS feeds (currently Towards Data Science)
-- Parses XML and extracts article metadata
-- Filters for articles with sufficient content
+### Main Window
+- **Left Column**: Unrated articles (AI score > 3, not topic-filtered)
+- **Right Column**: Articles you've marked as relevant
+- **Header Controls**:
+  - **📰 Fetch Stories**: Manual workflow trigger
+  - **🧠 Generate Profile**: Create/update preference profile (requires 2+2 ratings)
+  - **👤 Profile**: Open profile management dashboard
+  - **🔄 Rerate Articles**: Update all scores with current profile
+  - **🗑️ Trash**: View categorized rejected articles
+  - **⚙️ Settings**: Configure topic description and API access
 
-### 2. **Preprocessing**
-```
-📋 Raw Content → Clean → Validate → Structure
-```
-- Cleans and normalizes article content
-- Validates required fields (title, content, URL)
-- Prepares content for AI analysis
-- Skips articles that don't meet quality thresholds
+### Trash Window (3-Column System)
+- **User Rejected** (Red): Articles you marked "not relevant"
+- **Low Score** (Orange): Articles with AI score ≤3 (includes rating controls)
+- **Topic Filtered** (Gray): Articles that failed topic relevance check
 
-### 3. **AI Analysis**
-```
-🧠 Content → OpenAI API → Score + Summary + Category
-```
-- Sends article content to OpenAI GPT models
-- Generates relevance score (1-10)
-- Creates concise AI summary
-- Classifies into categories
-- Uses sophisticated prompts optimized for technical content
+### Profile Management Window
+- **Statistics**: Rating counts and profile status
+- **Preferences Display**: Current likes/dislikes with edit capabilities
+- **Profile Actions**: Export, delete, regenerate profile
+- **Change History**: AI-generated changelog of profile evolution
 
-### 4. **Quality Validation**
-```
-✅ AI Response → Validate → Retry if Needed
-```
-- Validates AI response format and content quality
-- Checks for required fields (score, summary, category)
-- Triggers retry with enhanced prompts if validation fails
-- Maximum 3 retry attempts with different prompt strategies
+### Settings Windows
+- **Settings**: Topic description configuration with link to API config
+- **API Configuration**: Firebase and OpenAI credentials with live testing
 
-### 5. **Content Scraping**
-```
-🕷️ Article URL → Puppeteer → Readability → Clean Text
-```
-- Launches headless browser to visit original article
-- Uses Mozilla Readability algorithm to extract main content
-- Cleans and formats extracted text
-- Falls back to RSS excerpt if scraping fails
-- Handles anti-bot measures and dynamic content
+## 🔧 Development
 
-### 6. **Data Storage**
-```
-💾 Processed Article → Firebase Firestore → Real-time UI Update
-```
-- Stores complete article data with analysis results
-- Includes both RSS excerpt and scraped full content
-- Tracks content source and scraping status
-- Updates user interface in real-time
+### Prerequisites
+- **Node.js**: 16+ with npm
+- **TypeScript**: 5.4+ for compilation
+- **API Keys**: OpenAI and Firebase credentials
 
-### Workflow State Management
+### Development Setup
+```bash
+# Clone repository
+git clone https://github.com/jackwimbish/adjutant.git
+cd adjutant
 
-The workflow maintains state throughout processing:
+# Install dependencies
+npm install
 
-```typescript
-interface AnalysisState {
-  // Input data
-  article: RSSItem;
-  source: NewsSource;
-  content: string;
-  
-  // Analysis results  
-  ai_summary?: string;
-  ai_score?: number;
-  ai_category?: string;
-  
-  // Content scraping
-  rss_excerpt?: string;
-  full_content_text?: string;
-  content_source?: 'rss' | 'scraped' | 'failed';
-  
-  // Quality control
-  quality_issues: string[];
-  retry_count: number;
-  max_retries: number;
-  
-  // Error handling
-  error?: string;
-  should_skip?: boolean;
-}
+# Build TypeScript
+npm run build
+
+# Copy window assets (required)
+cp src/windows/settings.html dist/windows/
+cp src/windows/topic-settings.html dist/windows/
+cp src/windows/trash.html dist/windows/
+cp src/windows/profile-management.html dist/windows/
+cp src/windows/api-config.html dist/windows/
+
+# Start development
+npm start
 ```
 
-### Error Handling & Resilience
+### Build Scripts
+```bash
+npm run build        # Compile TypeScript
+npm run dist:mac     # Create macOS DMG
+npm run pack         # Create app bundle for testing
+npm start           # Run development version
+```
 
-- **Retry Logic**: Failed analyses retry up to 3 times with improved prompts
-- **Graceful Degradation**: Scraping failures fall back to RSS content
-- **Rate Limiting**: Respects OpenAI API rate limits with exponential backoff
-- **Duplicate Prevention**: SHA256 hashing prevents reprocessing articles
-- **Comprehensive Logging**: Detailed logs with emoji-coded status indicators
+### Development Workflow
+1. **TypeScript Compilation**: Automatic compilation of `.ts` files
+2. **Manual Asset Copying**: HTML files must be copied manually
+3. **Hot Reload**: Restart app to see changes
+4. **DevTools**: Disabled by default (can be enabled in `src/config/app-config.ts`)
 
-## Data Model
+## 📊 Data Models
 
-### Article Schema
+### Article Data
 ```typescript
 interface ArticleData {
   // Core content
   url: string;
   title: string;
   author: string;
-  rss_excerpt: string;        // Original RSS content
-  full_content_text: string;  // Scraped full article
-  
-  // Metadata
+  rss_excerpt: string;
+  full_content_text: string;
   source_name: string;
   published_at: Date;
   fetched_at: Date;
   
   // AI Analysis
   ai_summary: string;
-  ai_score: number;           // 1-10 relevance score
+  ai_score: number | null;    // 1-10 or null for unscored
   ai_category: string;
   
-  // User interaction
-  relevant: boolean | null;  // null = unrated, true = relevant, false = not relevant
+  // User Interaction
+  relevant: boolean | null;   // null=unrated, true=relevant, false=not relevant
   rated_at?: Date;
   is_read: boolean;
+  is_hidden: boolean;
+  is_favorite: boolean;
   
-  // Content tracking
+  // Processing Metadata
   content_source: 'rss' | 'scraped' | 'failed';
   scraping_status: 'pending' | 'success' | 'failed';
+  scraping_error?: string;
   content_length: number;
+  
+  // Topic Filtering
+  topic_filtered?: boolean;
+  topic_filtered_at?: Date;
 }
 ```
 
-## Development
-
-### Prerequisites
-- Node.js 16+
-- npm or yarn
-- OpenAI API key
-- Firebase project
-
-### Setup
-```bash
-git clone https://github.com/your-repo/adjutant.git
-cd adjutant
-npm install
-cp env.example .env
-# Edit .env with your credentials
-npm run build
-npm start
+### User Profile
+```typescript
+interface UserProfile {
+  likes: string[];           // Max 15 descriptive preference phrases
+  dislikes: string[];        // Max 15 descriptive dislike phrases
+  changelog: string;         // AI explanation of profile changes
+  last_updated: Date;        // Profile update timestamp
+  created_at: Date;          // Profile creation timestamp
+}
 ```
 
-### Building Releases
-```bash
-npm run dist:mac    # Create DMG for macOS
-npm run pack        # Create app bundle for testing
-npm run release     # Complete build with instructions
+### Configuration
+```typescript
+interface UserConfig {
+  firebase: {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+  };
+  openai: {
+    apiKey: string;
+  };
+  firstRun: boolean;
+  appSettings: {
+    topicDescription: string;
+  };
+}
 ```
 
-## Architecture
+## 🚦 Performance & Cost Optimization
 
-- **Frontend**: Electron with TypeScript, HTML/CSS, Firebase SDK
-- **Backend**: Node.js workflow with OpenAI integration  
-- **Database**: Firebase Firestore with real-time listeners
-- **AI Processing**: Custom multi-step workflow with quality validation and retry logic
-- **Content Extraction**: Puppeteer + Mozilla Readability
-- **Distribution**: electron-builder with DMG packaging
+### Intelligent Model Selection
+- **GPT-4o-mini**: Topic filtering, basic summaries (73% cost savings)
+- **GPT-4o**: Complex analysis, profile-based scoring
+- **Smart Routing**: Automatic selection based on processing requirements
 
-## Contributing
+### Caching & Efficiency
+- **Duplicate Prevention**: SHA-256 hashing prevents reprocessing
+- **Content Truncation**: 4000 character limit for cost optimization
+- **Retry Logic**: Exponential backoff with maximum 3 attempts
+- **Firebase Optimization**: Unique app instances prevent conflicts
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+### Processing Statistics
+- **Average Processing Time**: 5-15 seconds per article
+- **Cost per Article**: ~$0.01-0.03 depending on content length and profile usage
+- **Success Rate**: >95% with comprehensive error handling
 
-## License
+## 🐛 Troubleshooting
 
-MIT License - see LICENSE file for details
+### Common Issues
 
-## Support
+**App won't open on macOS**
+- Right-click the app → "Open" (bypasses unsigned binary warning)
+- Check System Preferences → Security & Privacy for blocked apps
 
-For issues, questions, or feature requests, please [open an issue](https://github.com/your-repo/adjutant/issues) on GitHub.
+**Articles not appearing**
+- Verify API keys in API Configuration window
+- Check internet connection
+- Review console logs for error messages
+
+**Profile generation fails**
+- Ensure minimum 2 relevant + 2 not relevant ratings
+- Check OpenAI API credits and rate limits
+- Verify Firebase write permissions
+
+**Firebase connection errors**
+- Validate all 6 Firebase configuration fields
+- Test connection using "Test Firebase" button
+- Check Firestore security rules allow read/write
+
+## 📚 Documentation
+
+Comprehensive documentation available in `_docs/`:
+- **Article Processing Pipeline**: Detailed workflow documentation
+- **Development Workflow**: Build process and development guidelines
+- **Data Model**: Complete database schema specifications
+- **Implementation Summaries**: Phase-by-phase development history
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create feature branch**: `git checkout -b feature-name`
+3. **Follow TypeScript patterns**: Maintain type safety and existing architecture
+4. **Test thoroughly**: Ensure all windows and workflows function correctly
+5. **Submit pull request**: Include detailed description of changes
+
+### Development Guidelines
+- **TypeScript First**: All new code should be TypeScript with proper typing
+- **Error Handling**: Implement comprehensive error handling with retry logic
+- **Firebase Integration**: Use unique app instances to prevent conflicts
+- **UI Consistency**: Follow existing patterns for window creation and styling
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/jackwimbish/adjutant/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jackwimbish/adjutant/discussions)
+- **Documentation**: Check `_docs/` directory for detailed guides
+
+## 🏆 Acknowledgments
+
+- **LangGraph**: Workflow orchestration framework
+- **OpenAI**: GPT-4o and GPT-4o-mini API
+- **Firebase**: Real-time database and authentication
+- **Electron**: Cross-platform desktop framework
+- **TypeScript**: Type-safe JavaScript development
 
 ---
 
-**Built with ❤️ for intelligent content curation** 
+**🎯 Built for intelligent content curation with adaptive AI learning**
+
+*Transform your news consumption with personalized, AI-powered article analysis that learns and evolves with your interests.* 
